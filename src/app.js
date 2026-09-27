@@ -379,7 +379,7 @@ function logoCard() {
   if (!window.desktop || !window.desktop.setLogo) return '';
   return `<div class="card"><div class="card-head"><h2>${ic('sparkles')} Logo de mon app</h2></div>
     <div class="avatar-edit"><img class="logo" style="width:96px;height:96px" src="${logoSrc()}" alt="">
-      <div><p class="muted small">Choisis n'importe quelle image : l'app prend ton logo <b>et ses couleurs</b>, et la fenêtre prend son icône. Ça ne change que chez toi, pas chez le reste de l'équipe.</p>
+      <div><p class="muted small">Choisis n'importe quelle image : elle devient l'icône de ton app <b>dans la barre des tâches, sur le bureau et dans le menu Démarrer</b>, et l'app prend ses couleurs. Ça ne change que chez toi, pas chez le reste de l'équipe.</p>
       <label class="btn primary">${ic('download')} Choisir un logo<input type="file" accept="image/*" data-change="logo-file" hidden></label>
       ${S.customLogo ? '<button class="ghost" data-action="logo-reset">Revenir au logo de base</button>' : ''}</div></div></div>`;
 }
@@ -2651,7 +2651,7 @@ const CHANGES = {
     const file = el.files && el.files[0];
     if (!file) return;
     el.disabled = true;
-    try { logoApplied(await window.desktop.setLogo(await logoToPng(file))); toast('Nouveau logo appliqué'); refresh(); } catch (e) { toast(errMsg(e), 'error'); el.disabled = false; }
+    try { const r = await window.desktop.setLogo(await logoToPng(file)); logoApplied(r); toast(r.shortcuts ? `Nouveau logo appliqué (app + ${r.shortcuts} raccourci${r.shortcuts > 1 ? 's' : ''} : barre des tâches, bureau…)` : 'Nouveau logo appliqué'); refresh(); } catch (e) { toast(errMsg(e), 'error'); el.disabled = false; }
   },
   'avatar-file': async (el) => {
     const file = el.files && el.files[0];

@@ -147,14 +147,20 @@ function icoFromImage(img) {
   head.writeUInt32LE(png.length, 14); head.writeUInt32LE(22, 18);
   return Buffer.concat([head, png]);
 }
+// tous les raccourcis de l'app, quel que soit leur nom (bureau, menu Démarrer, barre des tâches épinglée)
 function shortcutPaths() {
-  const name = "Flowey's Software Manager.lnk";
   const appData = app.getPath('appData');
-  return [
-    path.join(app.getPath('desktop'), name),
-    path.join(appData, 'Microsoft', 'Windows', 'Start Menu', 'Programs', name),
-    path.join(appData, 'Microsoft', 'Internet Explorer', 'Quick Launch', 'User Pinned', 'TaskBar', name),
+  const dirs = [
+    app.getPath('desktop'),
+    path.join(appData, 'Microsoft', 'Windows', 'Start Menu', 'Programs'),
+    path.join(appData, 'Microsoft', 'Internet Explorer', 'Quick Launch', 'User Pinned', 'TaskBar'),
+    path.join(appData, 'Microsoft', 'Internet Explorer', 'Quick Launch'),
   ];
+  const out = [];
+  for (const d of dirs) {
+    try { for (const f of fs.readdirSync(d)) if (/\.lnk$/i.test(f)) out.push(path.join(d, f)); } catch (_) { /* dossier absent */ }
+  }
+  return out;
 }
 function applyShortcutIcons() {
   if (process.platform !== 'win32' || !app.isPackaged) return 0;
@@ -162,27 +168,31 @@ function applyShortcutIcons() {
   if (hasCustomLogo()) {
     const sq = squareLogo();
     if (sq) {
-      icon = path.join(app.getPath('userData'), 'custom-logo.ico');
+      // nouveau nom à chaque changement : Windows ne réutilise pas l'ancienne image en cache
+      for (const f of fs.readdirSync(app.getPath('userData'))) if (/^custom-logo.*\.ico$/i.test(f)) { try { fs.unlinkSync(path.join(app.getPath('userData'), f)); } catch (_) { /* rien */ } }
+      icon = path.join(app.getPath('userData'), `custom-logo-${Date.now()}.ico`);
       try { fs.writeFileSync(icon, icoFromImage(sq)); } catch (_) { icon = process.execPath; }
     }
   }
+  const exe = path.resolve(process.execPath).toLowerCase();
   let done = 0;
   for (const lnk of shortcutPaths()) {
     try {
-      if (!fs.existsSync(lnk)) continue;
       const cur = shell.readShortcutLink(lnk);
-      if (!cur.target || path.resolve(cur.target).toLowerCase() !== path.resolve(process.execPath).toLowerCase()) continue;
+      if (!cur.target || path.resolve(cur.target).toLowerCase() !== exe) continue;
       if (shell.writeShortcutLink(lnk, 'update', { icon, iconIndex: 0 })) done++;
     } catch (_) { /* raccourci inaccessible : on passe */ }
   }
+  // demande à Windows de rafraîchir ses icônes
+  try { require('child_process').spawn('ie4uinit.exe', ['-show'], { detached: true, stdio: 'ignore', windowsHide: true }).unref(); } catch (_) { /* rien */ }
   return done;
 }
 function logoChanged() {
   themeCache = undefined;
   const sq = squareLogo();
   if (sq && win && !win.isDestroyed()) win.setIcon(sq);
-  applyShortcutIcons();
-  return { ...logoInfo(), theme: computeTheme() };
+  const shortcuts = applyShortcutIcons();
+  return { ...logoInfo(), theme: computeTheme(), shortcuts };
 }
 ipcMain.handle('logo-get', () => logoInfo());
 ipcMain.handle('logo-set', (_e, dataUrl) => {
