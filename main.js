@@ -151,13 +151,14 @@ function setupUpdater() {
     return;
   }
   autoUpdater.autoDownload = true;
-  autoUpdater.autoInstallOnAppQuit = true;
+  // JAMAIS d'installation en arrière-plan à la fermeture : si on rouvrait l'app pendant ce temps,
+  // l'installateur la fermait de force. La mise à jour s'installe seulement quand on clique « Mettre à jour ».
+  autoUpdater.autoInstallOnAppQuit = false;
   const send = (status) => { if (win && !win.isDestroyed()) win.webContents.send('updater', status); };
   let version = null;
   autoUpdater.on('update-available', (info) => { version = info.version; logSession('maj trouvee ' + info.version); send({ state: 'downloading', version, percent: 0 }); });
   autoUpdater.on('download-progress', (p) => send({ state: 'downloading', version, percent: Math.round(p.percent || 0) }));
-  // la mise à jour ne ferme JAMAIS l'app d'elle-même : message « Mettre à jour » dans l'app,
-  // sinon installation discrète à la prochaine fermeture
+  // la mise à jour ne ferme JAMAIS l'app d'elle-même : message « Mettre à jour » dans l'app
   autoUpdater.on('update-downloaded', (info) => { logSession('maj telechargee ' + info.version); send({ state: 'ready', version: info.version }); });
   autoUpdater.on('error', (err) => console.error('Mise à jour :', err && err.message));
   const check = () => autoUpdater.checkForUpdates().catch(() => { /* hors ligne ou pas encore configuré */ });

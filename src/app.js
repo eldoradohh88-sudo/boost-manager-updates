@@ -1023,10 +1023,10 @@ function initUpdater() {
       updateBar(`${ic('sparkles')}<span>Version <b>${esc(u.version)}</b> prête</span><button class="sm primary" data-action="install-update">Redémarrer</button>`);
       modal(`<div class="card-head"><h2>${ic('sparkles')} Nouvelle version disponible</h2></div>
         <p>La version <b>${esc(u.version)}</b> de Flowey's Software Manager est prête.</p>
-        <p class="muted small">L'app se ferme quelques secondes puis se rouvre. Tes données ne bougent pas.</p>
+        <p class="muted small">L'app se ferme environ 20 secondes puis <b>se rouvre toute seule</b> : ne la relance pas pendant ce temps. Tes données ne bougent pas.</p>
         <div class="form-actions"><button class="primary" data-action="install-update">${ic('rocket')} Mettre à jour maintenant</button>
         <button data-action="close-modal">Plus tard</button></div>
-        <p class="muted small">« Plus tard » : elle s'installera automatiquement à la prochaine fermeture de l'app.</p>`, 'small');
+        <p class="muted small">« Plus tard » : rien ne s'installe tout seul, ce message reviendra à la prochaine ouverture.</p>`, 'small');
     }
   });
 }
