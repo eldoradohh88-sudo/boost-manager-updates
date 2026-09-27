@@ -291,12 +291,123 @@ function fileToDataUrl(file) {
   });
 }
 
+/* =====================================================================
+   PROFILS D'ÉQUIPE : bio, titre, jeux, Discord, couleur, bannière
+   ===================================================================== */
+async function loadProfiles() {
+  S.profiles = (await run(sb.rpc('team_profiles'))) || [];
+  return S.profiles;
+}
+const myProfile = () => (S.profiles || []).find((p) => p.name === myName()) || { name: myName() };
+const pColor = (p) => (p && /^#[0-9a-fA-F]{6}$/.test(p.color || '') ? p.color : '');
+function sinceText(d) {
+  if (!d) return '';
+  return 'Dans l\'équipe depuis ' + new Date(d).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+}
+function gameChips(games) {
+  const list = String(games || '').split(/[,;\n]+/).map((g) => g.trim()).filter(Boolean).slice(0, 12);
+  return list.length ? `<div class="chips">${list.map((g) => `<span class="chip">${esc(g)}</span>`).join('')}</div>` : '';
+}
+function profileBanner(p, cls = 'pbanner') {
+  return p.banner ? `<div class="${cls}"><img src="${esc(p.banner)}" alt=""></div>` : `<div class="${cls} empty"></div>`;
+}
+function profileCardHtml(p) {
+  const c = pColor(p);
+  return `<button class="pcard" data-action="profile" data-name="${esc(p.name)}" ${c ? `style="--pc:${c}"` : ''}>
+    ${profileBanner(p)}
+    <div class="pbody">${avatarHtml(p.name, 'lg pav')}
+      <div class="pname">${esc(p.name)}${p.me ? ' <span class="muted small">(toi)</span>' : ''}</div>
+      <div class="ptag">${esc(p.tagline || p.role || '')}</div>
+      <div class="pmeta">${p.availability ? availBadge(p.availability) : `<span class="badge b-purple">${esc(p.role || '')}</span>`}
+        <span class="muted small">${n(p.orders)} commande${n(p.orders) > 1 ? 's' : ''}</span></div></div></button>`;
+}
+async function viewProfiles(main) {
+  const list = await loadProfiles();
+  main.innerHTML = `${head('Profils', 'Toute l\'équipe : clique sur quelqu\'un pour voir son profil', `<button class="primary" data-action="my-profile">${ic('users')} Modifier mon profil</button>`)}
+    <div class="profiles-grid">${list.map(profileCardHtml).join('')}</div>`;
+}
+async function openProfile(name) {
+  if (!S.profiles || !S.profiles.some((p) => p.name === name)) { try { await loadProfiles(); } catch (_) { /* hors ligne */ } }
+  const p = (S.profiles || []).find((x) => x.name === name);
+  if (!p) return toast('Profil introuvable', 'error');
+  const c = pColor(p);
+  modal(`<div class="pmodal" ${c ? `style="--pc:${c}"` : ''}>
+    ${profileBanner(p, 'pbanner big')}
+    <button type="button" class="sm ghost pclose" data-action="close-modal">${ic('x')}</button>
+    <div class="pbody">${avatarHtml(p.name, 'lg pav')}
+      <div class="pname big">${esc(p.name)}</div>
+      <div class="ptag">${esc(p.tagline || p.role || '')}</div>
+      <div class="pmeta">${p.availability ? availBadge(p.availability) : `<span class="badge b-purple">${esc(p.role || '')}</span>`}
+        <span class="muted small">${n(p.orders)} commande${n(p.orders) > 1 ? 's' : ''} ${p.key === 'owner' ? 'gérées' : 'terminées'}</span>
+        ${p.since ? `<span class="muted small">${esc(sinceText(p.since))}</span>` : ''}</div>
+      ${p.bio ? `<div class="psection"><h3>Bio</h3><div class="pbio">${esc(p.bio)}</div></div>` : ''}
+      ${p.games ? `<div class="psection"><h3>Jeux</h3>${gameChips(p.games)}</div>` : ''}
+      ${p.discord ? `<div class="psection"><h3>Discord</h3><div class="secret-row"><code>${esc(p.discord)}</code>
+        <button class="sm" data-action="copy" data-text="${esc(p.discord)}">Copier</button></div></div>` : ''}
+      ${!p.bio && !p.games && !p.discord ? `<p class="muted small">${p.me ? 'Ton profil est encore vide.' : esc(p.name) + ' n\'a pas encore rempli son profil.'}</p>` : ''}
+      ${p.me ? `<div class="form-actions"><button class="primary" data-action="my-profile">${ic('users')} Modifier mon profil</button></div>` : ''}
+    </div></div>`, 'small profile');
+}
+async function openMyProfile() {
+  try { await loadProfiles(); } catch (e) { return toast(errMsg(e), 'error'); }
+  const p = myProfile();
+  S.editBanner = p.banner || null;
+  const c = pColor(p) || '#5b8def';
+  modal(`<form data-form="profile" class="pedit">
+    <div class="card-head"><h2>${ic('users')} Mon profil</h2><button type="button" class="sm ghost" data-action="close-modal">${ic('x')}</button></div>
+    <p class="muted small">Visible par toute l'équipe dans l'onglet <b>Profils</b>.</p>
+    <div class="pedit-media">
+      <div id="pedit-banner">${profileBanner({ banner: S.editBanner }, 'pbanner')}</div>
+      <div class="form-actions" style="margin-top:8px">
+        <label class="btn">${ic('download')} Bannière (image ou GIF, 8 Mo max)<input type="file" accept="image/gif,image/png,image/jpeg,image/webp" data-change="profile-banner" hidden></label>
+        <button type="button" class="ghost" data-action="profile-banner-clear">Sans bannière</button>
+        <button type="button" data-action="avatar">${ic('users')} Changer ma photo</button>
+      </div>
+    </div>
+    <div class="form-grid">
+      ${field('Titre (sous ton nom)', `<input name="tagline" maxlength="60" value="${esc(p.tagline || '')}" placeholder="ex. Main Jett · Radiant">`, 'class="field span-2"')}
+      ${field('Couleur du profil', `<input name="color" type="color" value="${esc(c)}">`)}
+      ${field('Bio', `<textarea name="bio" maxlength="600" placeholder="Présente-toi en quelques lignes">${esc(p.bio || '')}</textarea>`, 'class="field span-all"')}
+      ${field('Jeux (séparés par des virgules)', `<input name="games" maxlength="200" value="${esc(p.games || '')}" placeholder="Valorant, Rocket League, LoL">`, 'class="field span-2"')}
+      ${field('Discord', `<input name="discord" maxlength="50" value="${esc(p.discord || '')}" placeholder="pseudo">`)}
+    </div>
+    <div class="form-actions"><button class="primary" type="submit">${ic('check')} Enregistrer</button>
+      <button type="button" data-action="profile" data-name="${esc(myName())}">Voir mon profil</button></div></form>`, 'small');
+}
+async function uploadProfileBanner(file) {
+  if (!file || !/^image\//.test(file.type)) throw new Error('Ce fichier n\'est pas une image.');
+  const gif = file.type === 'image/gif';
+  let blob = file; let type = file.type; let ext = { 'image/gif': 'gif', 'image/png': 'png', 'image/webp': 'webp' }[file.type] || 'jpg';
+  if (!gif) { // image fixe : réduite à 1500 px de large en JPG
+    blob = await new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(file); const img = new Image();
+      img.onload = () => {
+        const w = Math.min(1500, img.naturalWidth); const h = Math.round(img.naturalHeight * (w / img.naturalWidth));
+        const c = document.createElement('canvas'); c.width = w; c.height = h;
+        c.getContext('2d').drawImage(img, 0, 0, w, h); URL.revokeObjectURL(url);
+        c.toBlob((b) => (b ? resolve(b) : reject(new Error('Conversion impossible.'))), 'image/jpeg', 0.86);
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Image illisible.')); };
+      img.src = url;
+    });
+    type = 'image/jpeg'; ext = 'jpg';
+  }
+  if (blob.size > 8 * 1024 * 1024) throw new Error('Bannière trop lourde (8 Mo max). Réduis ton GIF sur ezgif.com par exemple.');
+  if (!S.uid) { const { data } = await sb.auth.getUser(); S.uid = data && data.user && data.user.id; }
+  const path = `${S.uid}/banner-${Date.now()}.${ext}`;
+  const { error } = await sb.storage.from('avatars').upload(path, blob, { contentType: type, upsert: false });
+  if (error) throw error;
+  return sb.storage.from('avatars').getPublicUrl(path).data.publicUrl;
+}
+
 /* ---------------- photos de profil ---------------- */
 function avatarUrl(name) { return (S.avatars && name && S.avatars[name]) || ''; }
 function avatarHtml(name, cls = '') {
   const url = avatarUrl(name);
   const letter = esc(String(name || '?').slice(0, 1).toUpperCase());
-  return url ? `<span class="avatar ${cls}"><img src="${esc(url)}" alt=""></span>` : `<span class="avatar ${cls}">${letter}</span>`;
+  // les petites photos (listes, chat) ouvrent le profil de la personne
+  const click = /\bsm\b/.test(cls) && name ? ` data-action="profile" data-name="${esc(name)}" title="Voir le profil de ${esc(name)}"` : '';
+  return url ? `<span class="avatar ${cls}"${click}><img src="${esc(url)}" alt=""></span>` : `<span class="avatar ${cls}"${click}>${letter}</span>`;
 }
 const whoCell = (name) => `<span class="who-cell">${avatarHtml(name, 'sm')}<span>${esc(name)}</span></span>`;
 const myName = () => (isAdmin() ? 'Flowey' : (S.access && S.access.booster) || 'Booster');
@@ -544,13 +655,13 @@ async function onActivate(form, inShell) {
 /* ---------------- structure ---------------- */
 const NAV_ADMIN = [
   ['Principal', [['dashboard', 'home', 'Tableau de bord'], ['orders', 'list', 'Commandes'], ['boosters', 'users', 'Équipe']]],
-  ['Communication', [['announcements', 'megaphone', 'Annonces'], ['wallet', 'trophy', 'Wallet équipe']]],
+  ['Communication', [['announcements', 'megaphone', 'Annonces'], ['profiles', 'users', 'Profils'], ['wallet', 'trophy', 'Wallet équipe']]],
   ['Argent', [['eldorado', 'globe', 'Eldorado'], ['withdrawals', 'wallet', 'Wallet Eldorado'], ['payments', 'send', 'Paiements']]],
   ['Outils', [['calc', 'chart', 'Calculateur'], ['licenses', 'key', 'Licences'], ['settings', 'settings', 'Paramètres']]],
 ];
 const NAV_BOOSTER = [
   ['Mon espace', [['home', 'home', 'Accueil'], ['myorders', 'list', 'Mes commandes'], ['earnings', 'dollar', 'Mes gains']]],
-  ['Équipe', [['wallet', 'trophy', 'Wallet équipe']]],
+  ['Équipe', [['profiles', 'users', 'Profils'], ['wallet', 'trophy', 'Wallet équipe']]],
   ['Compte', [['license', 'key', 'Ma licence']]],
 ];
 
@@ -566,7 +677,7 @@ function renderShell(view) {
       ${nav.map(([group, items]) => `<div class="nav-group">${group}</div>
         ${items.map(([id, icon, label]) => `<button class="nav-item" data-action="nav" data-view="${id}">${ic(icon)}<span>${label}</span></button>`).join('')}`).join('')}
       <div class="spacer"></div>
-      <div class="userbox"><button class="avatar-btn" id="my-avatar" data-action="avatar" title="Changer ma photo de profil">${avatarHtml(name)}</button>
+      <div class="userbox"><button class="avatar-btn" id="my-avatar" data-action="my-profile" title="Mon profil">${avatarHtml(name)}</button>
         <div class="who"><div class="email">${esc(name)}</div><div class="muted">${esc(sub)}</div></div>
         <button class="sm ghost" data-action="logout" title="Se déconnecter">${ic('logout')}</button></div>
     </aside>
@@ -1745,7 +1856,7 @@ const VIEWS = {
   dashboard: viewDashboard, orders: viewOrders, order: viewOrder, boosters: viewBoosters,
   announcements: viewAnnouncements, wallet: viewWallet, notifs: viewNotifs, payments: viewPayments,
   withdrawals: viewWithdrawals, eldorado: viewEldorado, calc: viewCalc, licenses: viewLicenses, settings: viewSettings,
-  home: viewHome, myorders: viewMyOrders, earnings: viewEarnings, license: viewLicense,
+  home: viewHome, myorders: viewMyOrders, earnings: viewEarnings, license: viewLicense, profiles: viewProfiles,
 };
 
 /* =====================================================================
@@ -1758,6 +1869,9 @@ const ACTIONS = {
   nav: (el) => go(el.dataset.view),
   logout: () => logout(),
   avatar: () => openAvatar(),
+  profile: (el) => openProfile(el.dataset.name),
+  'my-profile': () => openMyProfile(),
+  'profile-banner-clear': () => { S.editBanner = null; const b = $('#pedit-banner'); if (b) b.innerHTML = profileBanner({}, 'pbanner'); },
   'banner-reset': async () => { try { await window.desktop.resetBanner(); await initBanner(); toast('Bannière retirée'); refresh(); } catch (e) { toast(errMsg(e), 'error'); } },
   'logo-reset': async () => { try { logoApplied(await window.desktop.resetLogo()); toast('Logo de base remis'); refresh(); } catch (e) { toast(errMsg(e), 'error'); } },
   'avatar-remove': async () => {
@@ -1897,6 +2011,15 @@ const FORMS = {
     const o = formData(f);
     try { await run(sb.rpc('set_my_payout', { p_method: o.method, p_details: o.details })); toast('Coordonnées enregistrées'); } catch (e) { toast(errMsg(e), 'error'); }
   },
+  profile: async (f) => {
+    const o = formData(f);
+    try {
+      await run(sb.rpc('set_my_profile', { p: { tagline: o.tagline, bio: o.bio, games: o.games, discord: o.discord, color: o.color, banner_url: S.editBanner || '' } }));
+      await loadProfiles();
+      closeModal(); toast('Profil enregistré');
+      if (S.view === 'profiles') refresh();
+    } catch (e) { toast(errMsg(e), 'error'); }
+  },
   'rename-booster': async (f) => {
     const o = formData(f);
     try { await run(sb.rpc('admin_rename_booster', { p_id: o.id, p_name: o.name })); await loadRefs(); closeModal(); toast('Nom changé : ' + o.name.trim()); refresh(); } catch (e) { toast(errMsg(e), 'error'); }
@@ -1967,6 +2090,17 @@ const CHANGES = {
     if (!f || !url || f.elements.ref.value) return;
     const m = url.replace(/[?#].*$/, '').match(/([A-Za-z0-9_-]{5,})\/?$/);
     if (m) f.elements.ref.value = m[1];
+  },
+  'profile-banner': async (el) => {
+    const file = el.files && el.files[0];
+    if (!file) return;
+    el.disabled = true;
+    try {
+      S.editBanner = await uploadProfileBanner(file);
+      const b = $('#pedit-banner'); if (b) b.innerHTML = profileBanner({ banner: S.editBanner }, 'pbanner');
+      toast('Bannière prête : clique sur Enregistrer');
+    } catch (e) { toast(errMsg(e), 'error'); }
+    el.disabled = false;
   },
   'banner-file': async (el) => {
     const file = el.files && el.files[0];

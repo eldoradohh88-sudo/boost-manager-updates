@@ -920,6 +920,65 @@ language sql stable security definer set search_path = public as $$
 $$;
 
 -- ---------------------------------------------------------------------
+-- PROFILS D'ÉQUIPE (v2.9) : bio, titre, jeux, Discord, couleur, bannière
+-- ---------------------------------------------------------------------
+-- une ligne par membre : 'owner' pour Flowey, sinon l'id du booster
+create table if not exists public.profile_cards (
+  key        text primary key,
+  tagline    text check (length(tagline) <= 60),
+  bio        text check (length(bio) <= 600),
+  games      text check (length(games) <= 200),
+  discord    text check (length(discord) <= 50),
+  color      text check (color ~ '^#[0-9a-fA-F]{6}$'),
+  banner_url text check (length(banner_url) <= 500),
+  updated_at timestamptz not null default now()
+);
+alter table public.profile_cards enable row level security;
+drop policy if exists admin_all on public.profile_cards;
+create policy admin_all on public.profile_cards for all using (public.is_admin()) with check (public.is_admin());
+
+create or replace function public.set_my_profile(p jsonb) returns void
+language plpgsql security definer set search_path = public as $$
+declare k text; v_banner text := nullif(trim(coalesce(p->>'banner_url', '')), ''); v_color text := nullif(trim(coalesce(p->>'color', '')), '');
+begin
+  if not public.has_access() then raise exception 'Accès refusé'; end if;
+  if public.is_admin() then k := 'owner';
+  else
+    k := public.my_booster_id()::text;
+    if k is null then raise exception 'Compte non relié à un booster'; end if;
+  end if;
+  if v_banner is not null and (v_banner !~ '^https://'
+      or position('/storage/v1/object/public/avatars/' || auth.uid()::text || '/' in v_banner) = 0) then
+    raise exception 'Lien de bannière invalide';
+  end if;
+  if v_color is not null and v_color !~ '^#[0-9a-fA-F]{6}$' then raise exception 'Couleur invalide'; end if;
+  insert into profile_cards (key, tagline, bio, games, discord, color, banner_url, updated_at)
+  values (k, left(nullif(trim(coalesce(p->>'tagline', '')), ''), 60), left(nullif(trim(coalesce(p->>'bio', '')), ''), 600),
+          left(nullif(trim(coalesce(p->>'games', '')), ''), 200), left(nullif(trim(coalesce(p->>'discord', '')), ''), 50),
+          v_color, v_banner, now())
+  on conflict (key) do update set tagline = excluded.tagline, bio = excluded.bio, games = excluded.games,
+    discord = excluded.discord, color = excluded.color, banner_url = excluded.banner_url, updated_at = now();
+end $$;
+
+-- tous les profils de l'équipe (visibles par toute l'équipe)
+create or replace function public.team_profiles() returns jsonb
+language sql stable security definer set search_path = public as $$
+  select case when not public.has_access() then '[]'::jsonb else
+    (select jsonb_build_array(jsonb_build_object('key', 'owner', 'name', 'Flowey', 'role', 'Fondateur', 'me', public.is_admin(),
+        'avatar', (select owner_avatar_url from app_settings where id = 1), 'availability', null, 'since', null,
+        'orders', (select count(*) from orders where status = 'Terminée'),
+        'tagline', c.tagline, 'bio', c.bio, 'games', c.games, 'discord', c.discord, 'color', c.color, 'banner', c.banner_url))
+     from (select 1) x left join profile_cards c on c.key = 'owner')
+    || coalesce((select jsonb_agg(jsonb_build_object('key', b.id::text, 'name', b.name, 'role', 'Booster',
+        'me', b.id = public.my_booster_id(), 'avatar', b.avatar_url, 'availability', b.availability, 'since', b.created_at,
+        'orders', (select count(*) from orders o where o.status = 'Terminée' and b.id in (o.booster1_id, o.booster2_id)),
+        'tagline', c.tagline, 'bio', c.bio, 'games', c.games, 'discord', c.discord, 'color', c.color, 'banner', c.banner_url)
+        order by b.name)
+      from boosters b left join profile_cards c on c.key = b.id::text where b.active), '[]'::jsonb)
+  end;
+$$;
+
+-- ---------------------------------------------------------------------
 -- RENOMMER / SUPPRIMER UN BOOSTER (v2.6)
 -- ---------------------------------------------------------------------
 create or replace function public.admin_rename_booster(p_id uuid, p_name text) returns void
@@ -962,7 +1021,7 @@ begin
   foreach f in array array['my_access()','claim_admin()','activate_license(text)',
       'admin_create_license(uuid,int,text)','admin_extend_license(text,int)','set_my_availability(text)','set_my_payout(text,text)',
       'booster_set_stage(uuid,text)','my_orders()','my_order(uuid)','my_summary()','team_wallet()',
-      'admin_dashboard(int,int)','set_my_avatar(text)','team_avatars()','admin_rename_booster(uuid,text)','admin_delete_booster(uuid)'] loop
+      'admin_dashboard(int,int)','set_my_avatar(text)','team_avatars()','admin_rename_booster(uuid,text)','admin_delete_booster(uuid)','set_my_profile(jsonb)','team_profiles()'] loop
     execute format('revoke execute on function public.%s from public, anon', f);
     execute format('grant execute on function public.%s to authenticated', f);
   end loop;
