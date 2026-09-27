@@ -21,27 +21,34 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: En attente du logo
+        if: hashFiles('src/logo.png') == ''
+        run: echo "Pas encore de src/logo.png - ajoute ton logo dans le dossier src pour publier."
+
       - uses: actions/setup-node@v4
+        if: hashFiles('src/logo.png') != ''
         with:
           node-version: 20
 
       - name: Installer
-        run: npm install --no-audit --no-fund
+        if: hashFiles('src/logo.png') != ''
+        run: |
+          npm install --no-audit --no-fund
+          npm install --no-save --no-audit --no-fund sharp@0.33.5
 
       - name: Pseudo GitHub dans package.json
+        if: hashFiles('src/logo.png') != ''
         shell: pwsh
         run: |
           $p = Get-Content package.json -Raw
           $p.Replace('TON-PSEUDO-GITHUB', '${{ github.repository_owner }}') | Set-Content package.json -NoNewline -Encoding utf8
 
-      - name: Verifier le logo
-        run: node check-logo.js
-
-      - name: Creer l'icone
-        shell: powershell
-        run: ./make-icon.ps1
+      - name: Preparer le logo et l'icone
+        if: hashFiles('src/logo.png') != ''
+        run: node prepare-logo.js
 
       - name: Construire et publier
+        if: hashFiles('src/logo.png') != ''
         run: npx electron-builder --win --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

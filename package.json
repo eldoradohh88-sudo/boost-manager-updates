@@ -51,7 +51,7 @@
     "publish": [
       {
         "provider": "github",
-        "owner": "TON-PSEUDO-GITHUB",
+        "owner": "eldoradohh88-sudo",
         "repo": "boost-manager-updates",
         "releaseType": "release"
       }
