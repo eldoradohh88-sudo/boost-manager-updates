@@ -414,11 +414,13 @@ let bannerTimer = null;
 let lastBannerPalette = '';
 function bannerOpacity() { try { return localStorage.getItem('bm_banner_op') || '.4'; } catch (_) { return '.4'; } }
 function stopBannerColors() { if (bannerTimer) clearInterval(bannerTimer); bannerTimer = null; lastBannerPalette = ''; }
-function applyBannerPalette(pal) {
+let lastBannerApply = 0;
+function applyBannerPalette(pal, force) {
   if (!pal) return; // image en noir et blanc à cet instant : on garde les couleurs actuelles
   const key = JSON.stringify(pal);
   if (key === lastBannerPalette) return;
-  lastBannerPalette = key;
+  if (!force && Date.now() - lastBannerApply < 1800) return; // pas plus d'un changement de couleurs toutes les ~2 s
+  lastBannerPalette = key; lastBannerApply = Date.now();
   applyTheme(pal);
 }
 function paletteOf(source, ctx) {
@@ -437,8 +439,8 @@ async function bannerTimeline(url, ctx) {
   const dec = new ImageDecoder({ data: bytes, type: m[1] });
   try {
     await dec.tracks.ready;
-    const count = Math.min(dec.tracks.selectedTrack ? dec.tracks.selectedTrack.frameCount : 1, 400);
-    const every = Math.max(1, Math.ceil(count / 60)); // au plus ~60 relevés de couleur
+    const count = Math.min(dec.tracks.selectedTrack ? dec.tracks.selectedTrack.frameCount : 1, 240);
+    const every = Math.max(1, Math.ceil(count / 24)); // au plus ~24 relevés de couleur (léger pour le processeur)
     const steps = []; let t = 0;
     for (let i = 0; i < count; i++) {
       const { image } = await dec.decode({ frameIndex: i });
@@ -468,9 +470,12 @@ async function initBanner() {
   if (!pf.bannerColors) { applyTheme(S.baseTheme); return; } // l'utilisateur garde les couleurs du logo
   const start = performance.now();
   let tl = null;
-  if (pf.effects) { try { tl = await bannerTimeline(url, ctx); } catch (_) { tl = null; } }
+  if (pf.effects) {
+    await new Promise((r) => setTimeout(r, 800)); // on laisse l'app s'afficher d'abord
+    try { tl = await bannerTimeline(url, ctx); } catch (_) { tl = null; }
+  }
   if (!tl || tl.steps.length <= 1) { // image fixe (ou décodeur absent) : une seule couleur
-    try { applyBannerPalette(tl && tl.steps[0] ? tl.steps[0].pal : paletteOf(img, ctx)); } catch (_) { /* rien */ }
+    try { applyBannerPalette(tl && tl.steps[0] ? tl.steps[0].pal : paletteOf(img, ctx), true); } catch (_) { /* rien */ }
     return;
   }
   // GIF animé : les couleurs de l'app suivent l'animation
@@ -482,7 +487,7 @@ async function initBanner() {
     applyBannerPalette(cur.pal);
   };
   tick();
-  bannerTimer = setInterval(tick, 250);
+  bannerTimer = setInterval(tick, 500);
 }
 function bannerCard() {
   if (!window.desktop || !window.desktop.setBanner) return '';
@@ -506,8 +511,10 @@ function fileToDataUrl(file) {
 /* =====================================================================
    PROFILS D'ÉQUIPE : bio, titre, jeux, Discord, couleur, bannière
    ===================================================================== */
-async function loadProfiles() {
+async function loadProfiles(force = false) {
+  if (!force && S.profiles && S.profilesAt && Date.now() - S.profilesAt < 60000) return S.profiles;
   S.profiles = (await run(sb.rpc('team_profiles'))) || [];
+  S.profilesAt = Date.now();
   return S.profiles;
 }
 const myProfile = () => (S.profiles || []).find((p) => p.name === myName()) || { name: myName() };
@@ -534,7 +541,7 @@ function profileCardHtml(p) {
         <span class="muted small">${n(p.orders)} commande${n(p.orders) > 1 ? 's' : ''}</span></div></div></button>`;
 }
 async function viewProfiles(main) {
-  const list = await loadProfiles();
+  const list = await loadProfiles(true);
   main.innerHTML = `${head('Profils', 'Toute l\'équipe : clique sur quelqu\'un pour voir son profil', `<button class="primary" data-action="my-profile">${ic('users')} Modifier mon profil</button>`)}
     <div class="profiles-grid">${list.map(profileCardHtml).join('')}</div>`;
 }
@@ -562,7 +569,7 @@ async function openProfile(name) {
     </div></div>`, 'small profile');
 }
 async function openMyProfile() {
-  try { await loadProfiles(); } catch (e) { return toast(errMsg(e), 'error'); }
+  try { await loadProfiles(true); } catch (e) { return toast(errMsg(e), 'error'); }
   const p = myProfile();
   S.editBanner = p.banner || null;
   const c = pColor(p) || '#5b8def';
@@ -647,7 +654,7 @@ function updateChatBadge() {
 }
 // compte les messages non lus (au démarrage et à l'ouverture de Messages)
 async function loadChatSummary() {
-  const rows = await run(sb.from('team_messages').select('id, channel, author_key, author_name, body, created_at').order('created_at', { ascending: false }).limit(400));
+  const rows = await run(sb.from('team_messages').select('id, channel, author_key, author_name, body, file_name, created_at').order('created_at', { ascending: false }).limit(400));
   const read = chatRead(); const unread = {}; const last = {};
   for (const m of rows) {
     if (!last[m.channel]) last[m.channel] = m;
@@ -673,10 +680,11 @@ function startTeamChat() {
       const pf = prefs();
       if (pf.sMessage) playSound();
       const where = m.channel === 'general' ? ' · Général' : ' · privé';
-      toast(`${m.author_name}${where} : ${m.body.slice(0, 80)}`);
+      const txt = m.body || '📎 ' + (m.file_name || 'Pièce jointe');
+      toast(`${m.author_name}${where} : ${txt.slice(0, 80)}`);
       try {
         if (pf.winNotif && !document.hasFocus() && window.Notification) {
-          const w = new Notification(m.author_name + where, { body: m.body.slice(0, 140) });
+          const w = new Notification(m.author_name + where, { body: txt.slice(0, 140) });
           w.onclick = () => { window.focus(); S.chatChannel = m.channel; go('chat'); };
         }
       } catch (_) { /* rien */ }
@@ -686,8 +694,64 @@ function startTeamChat() {
 }
 function stopTeamChat() { if (S.teamChannel && sb) { sb.removeChannel(S.teamChannel); S.teamChannel = null; } }
 
+/* ---------------- pièces jointes de la messagerie ---------------- */
+const BLOCKED_EXT = /\.(exe|bat|cmd|com|scr|msi|ps1|vbs|js|jar|lnk|reg|hta)$/i;
+const fileSize = (b) => { const v = Number(b) || 0; return v < 1024 ? v + ' o' : v < 1048576 ? (v / 1024).toFixed(0) + ' Ko' : (v / 1048576).toFixed(1) + ' Mo'; };
+const isImg = (m) => /^image\/(png|jpe?g|gif|webp|bmp)$/i.test(m.file_type || '');
+S.fileUrls = S.fileUrls || {};
+function setChatFile(file) {
+  if (!file) return;
+  if (BLOCKED_EXT.test(file.name)) return toast('Ce type de fichier est bloqué pour la sécurité de l\'équipe.', 'error');
+  if (file.size > 25 * 1024 * 1024) return toast('Fichier trop lourd (25 Mo max).', 'error');
+  S.chatFile = file;
+  renderChatFileChip();
+}
+function renderChatFileChip() {
+  const box = $('#tchat-file');
+  if (!box) return;
+  const f = S.chatFile;
+  box.innerHTML = f ? `<div class="att-chip">${ic('download')}<span><b>${esc(f.name)}</b> <span class="muted small">${fileSize(f.size)}</span></span>
+    <button type="button" class="sm ghost" data-action="chat-file-clear" title="Retirer">${ic('x')}</button></div>` : '';
+}
+function attachmentHtml(m) {
+  if (!m.file_path) return '';
+  const url = S.fileUrls[m.file_path];
+  if (isImg(m)) {
+    return `<button type="button" class="att-img" data-action="att-open" data-path="${esc(m.file_path)}" data-name="${esc(m.file_name || '')}">
+      ${url ? `<img src="${esc(url)}" alt="${esc(m.file_name || '')}" loading="lazy">` : '<span class="muted small">Chargement de l\'image…</span>'}</button>`;
+  }
+  return `<div class="att-file">${ic('download')}<span class="att-meta"><b>${esc(m.file_name || 'Fichier')}</b><span class="muted small">${fileSize(m.file_size)}</span></span>
+    <button type="button" class="sm" data-action="att-dl" data-path="${esc(m.file_path)}" data-name="${esc(m.file_name || 'fichier')}">Télécharger</button></div>`;
+}
+// liens temporaires (1 h) pour afficher les images du salon ouvert
+async function resolveAttachments() {
+  const need = [...new Set((S.chatMsgs || []).filter((m) => m.file_path && isImg(m) && !S.fileUrls[m.file_path]).map((m) => m.file_path))];
+  if (!need.length) return;
+  try {
+    const { data } = await sb.storage.from('attachments').createSignedUrls(need, 3600);
+    (data || []).forEach((d) => { if (d.signedUrl) S.fileUrls[d.path] = d.signedUrl; });
+    setTimeout(() => { need.forEach((p) => { delete S.fileUrls[p]; }); }, 55 * 60 * 1000);
+    renderTeamLog(true);
+  } catch (_) { /* image indisponible */ }
+}
+async function downloadAttachment(path, name) {
+  const { data, error } = await sb.storage.from('attachments').createSignedUrl(path, 600, { download: name || true });
+  if (error) throw error;
+  if (window.desktop && window.desktop.download) await window.desktop.download(data.signedUrl);
+  else window.open(data.signedUrl);
+}
+async function uploadChatFile(file) {
+  if (!S.uid) { const { data } = await sb.auth.getSession(); S.uid = data && data.session && data.session.user.id; }
+  const safe = file.name.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\w.-]+/g, '_').slice(-80);
+  const path = `${S.uid}/${Date.now()}-${safe}`;
+  const { error } = await sb.storage.from('attachments').upload(path, file, { contentType: file.type || 'application/octet-stream', upsert: false });
+  if (error) throw error;
+  return { path, name: file.name, type: file.type || '', size: String(file.size) };
+}
+
 async function viewChat(main) {
   await Promise.all([loadProfiles(), loadChatSummary()]);
+  if (!main.isConnected) return;
   S.chatChannel = S.chatChannel || 'general';
   main.innerHTML = `${head('Messages', 'Le groupe général et tes conversations privées')}
     <div class="tchat card">
@@ -695,13 +759,16 @@ async function viewChat(main) {
       <section class="tchat-main">
         <div class="tchat-head" id="tchat-head"></div>
         <div class="tchat-log" id="tchat-log"><div class="muted">Chargement…</div></div>
+        <div id="tchat-file"></div>
         <form class="tchat-form" data-form="team-msg">
-          <textarea name="body" rows="1" maxlength="2000" placeholder="Écris un message… (Entrée pour envoyer, Maj+Entrée pour aller à la ligne)" required></textarea>
+          <label class="btn att-btn" title="Joindre un fichier (25 Mo max)">📎<input type="file" data-change="chat-file" hidden></label>
+          <textarea name="body" rows="1" maxlength="2000" placeholder="Écris un message… (Entrée pour envoyer · glisse ou colle un fichier pour le joindre)"></textarea>
           <button class="primary" type="submit">${ic('send')}</button>
         </form>
       </section>
     </div>`;
   renderChatList();
+  renderChatFileChip();
   await openChannel(S.chatChannel);
 }
 function renderChatList() {
@@ -712,7 +779,7 @@ function renderChatList() {
     const un = (S.chatUnread || {})[ch] || 0;
     const last = (S.chatLast || {})[ch];
     return `<button class="tchat-item ${S.chatChannel === ch ? 'active' : ''}" data-action="chat-open" data-ch="${esc(ch)}">
-      ${avatar}<span class="tchat-who"><b>${esc(name)}</b><span class="muted small">${last ? esc((last.author_key === me ? 'Toi : ' : '') + last.body.slice(0, 40)) : esc(sub)}</span></span>
+      ${avatar}<span class="tchat-who"><b>${esc(name)}</b><span class="muted small">${last ? esc((last.author_key === me ? 'Toi : ' : '') + (last.body || '📎 ' + (last.file_name || 'Pièce jointe')).slice(0, 40)) : esc(sub)}</span></span>
       ${un ? `<span class="nav-badge">${un}</span>` : ''}</button>`;
   };
   const members = (S.profiles || []).filter((p) => p.key !== me);
@@ -740,9 +807,10 @@ async function openChannel(ch) {
   updateChatBadge(); renderChatList();
   const ta = document.querySelector('.tchat-form textarea'); if (ta && ta.focus) ta.focus();
 }
-function renderTeamLog() {
+function renderTeamLog(keepScroll) {
   const log = $('#tchat-log');
   if (!log) return;
+  const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 80;
   const me = myKey();
   let prevDay = '';
   log.innerHTML = (S.chatMsgs || []).length ? S.chatMsgs.map((m) => {
@@ -752,9 +820,10 @@ function renderTeamLog() {
     const mine = m.author_key === me;
     return `${sep}<div class="msg-line ${mine ? 'mine' : ''}">${avatarHtml(m.author_name, 'sm')}<div class="msg">
       <div class="who">${esc(m.author_name)} · ${new Date(m.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</div>
-      <div class="txt">${esc(m.body)}</div></div></div>`;
+      ${m.body ? `<div class="txt">${esc(m.body)}</div>` : ''}${attachmentHtml(m)}</div></div>`;
   }).join('') : emptyBox(S.chatChannel === 'general' ? 'Aucun message. Dis bonjour à l\'équipe !' : 'Aucun message. Lance la conversation !', 'send');
-  log.scrollTop = log.scrollHeight;
+  if (!keepScroll || atBottom) log.scrollTop = log.scrollHeight;
+  if (!keepScroll) resolveAttachments();
 }
 
 /* ---------------- photos de profil ---------------- */
@@ -904,19 +973,21 @@ async function loadAccess() {
   renderGate();
 }
 
-async function loadRefs() {
-  const [boosters, rules, fees] = await Promise.all([
+// données de base (boosters, règles, taux, photos, réglages) : tout part en même temps,
+// et on ne redemande pas si c'est déjà frais (moins de 30 s), sauf après une modification
+async function loadRefs(force = true) {
+  if (!force && S.refsAt && Date.now() - S.refsAt < 30000) return;
+  if (!S.uid) { try { const { data } = await sb.auth.getSession(); S.uid = data && data.session && data.session.user.id; } catch (_) { /* rien */ } }
+  const [boosters, rules, fees, , st] = await Promise.all([
     run(sb.from('boosters').select('*').order('name')),
     run(sb.from('split_rules').select('*').order('sort')),
     run(sb.from('fee_rates').select('*').order('effective_from')),
+    loadAvatars(),
+    isAdmin() ? run(sb.from('app_settings').select('*').eq('id', 1).maybeSingle()) : Promise.resolve(null),
   ]);
   S.boosters = boosters; S.rules = rules; S.fees = fees;
-  try { const { data } = await sb.auth.getUser(); S.uid = data && data.user && data.user.id; } catch (_) { /* rien */ }
-  await loadAvatars();
-  if (isAdmin()) {
-    const st = await run(sb.from('app_settings').select('*').eq('id', 1).maybeSingle());
-    if (st) S.settings = st;
-  }
+  if (st) S.settings = st;
+  S.refsAt = Date.now();
 }
 
 // revérifie la licence toutes les 10 minutes
@@ -1045,6 +1116,7 @@ function renderShell(view) {
   startNotifications();
   startTeamChat();
   loadChatSummary().catch(() => { /* messagerie pas encore installée dans Supabase */ });
+  setTimeout(prefetchViews, 2500);
   if (window.desktop && window.desktop.version) {
     window.desktop.version().then((v) => { const el = $('#app-version'); if (el) el.textContent = 'v' + v; }).catch(() => {});
   }
@@ -1058,15 +1130,38 @@ async function go(view, keepChat) {
   document.querySelectorAll('.nav-item').forEach((b) => b.classList.toggle('active',
     b.dataset.view === view || (view === 'order' && b.dataset.view === (isAdmin() ? 'orders' : 'myorders'))));
   const main = $('#main');
-  main.innerHTML = '<div class="muted">Chargement…</div>';
+  // chaque page s'affiche dans son propre bloc : si on change de page avant la fin du chargement,
+  // l'ancienne page ne vient plus écraser la nouvelle
+  const box = document.createElement('div');
+  box.className = 'view';
+  const key = view === 'order' ? 'order:' + S.orderId : view;
+  S.viewCache = S.viewCache || {};
+  const cached = S.viewCache[key];
+  box.innerHTML = cached || '<div class="skeleton"><div></div><div></div><div></div></div>';
+  if (cached) box.classList.add('stale');
+  main.replaceChildren(box);
+  if (!keepChat) main.scrollTop = 0;
   try {
-    await VIEWS[view](main);
-    animateCounts(main);
+    await VIEWS[view](box);
+    box.classList.remove('stale');
+    if (!cached) animateCounts(box);
+    if (box.isConnected && !['chat', 'order'].includes(view)) S.viewCache[key] = box.innerHTML;
   } catch (e) {
-    main.innerHTML = `<div class="error-box">${esc(errMsg(e))}</div>`;
+    box.classList.remove('stale');
+    box.innerHTML = `<div class="error-box">${esc(errMsg(e))}</div>`;
   }
 }
-const refresh = () => go(S.view);
+// prépare en arrière-plan les pages les plus utilisées : elles s'afficheront tout de suite au clic
+async function prefetchViews() {
+  const list = isAdmin() ? ['orders', 'boosters', 'wallet', 'payments', 'profiles', 'licenses'] : ['myorders', 'earnings', 'wallet', 'profiles'];
+  for (const v of list) {
+    if (!S.access || (S.viewCache && S.viewCache[v]) || S.view === v) continue;
+    const box = document.createElement('div');
+    try { await VIEWS[v](box); S.viewCache = S.viewCache || {}; S.viewCache[v] = box.innerHTML; } catch (_) { /* tant pis, elle se chargera au clic */ }
+    await new Promise((r) => setTimeout(r, 300));
+  }
+}
+const refresh = () => { if (S.viewCache) delete S.viewCache[S.view === 'order' ? 'order:' + S.orderId : S.view]; return go(S.view); };
 function openOrder(id) { S.orderId = id; go('order'); }
 
 /* =====================================================================
@@ -2057,7 +2152,7 @@ function licenseStatus(l) {
 }
 
 async function viewLicenses(main) {
-  await loadRefs(); // liste des boosters toujours à jour
+  await loadRefs(false);
   const rows = await run(sb.from('licenses').select('*, profiles(email)').order('created_at', { ascending: false }));
   const pre = S.licPreset;
   const pick = [...S.boosters].sort((x, y) => (y.active === false ? 0 : 1) - (x.active === false ? 0 : 1) || String(x.name).localeCompare(String(y.name)));
@@ -2088,8 +2183,7 @@ async function viewLicenses(main) {
 }
 
 async function viewSettings(main) {
-  await loadRefs();
-  if (window.desktop && window.desktop.gpu) { try { S.gpu = await window.desktop.gpu(); } catch (_) { /* rien */ } }
+  await Promise.all([loadRefs(false), window.desktop && window.desktop.gpu ? window.desktop.gpu().then((g) => { S.gpu = g; }).catch(() => {}) : null]);
   main.innerHTML = `${head('Paramètres', 'Taux Eldorado, règles de partage, photo et logo')}
   ${personalSettingsHtml()}
   <h2 class="section-title">${ic('settings')} Réglages de l'équipe</h2>
@@ -2229,6 +2323,15 @@ const ACTIONS = {
   logout: () => logout(),
   avatar: () => openAvatar(),
   'chat-open': (el) => openChannel(el.dataset.ch),
+  'chat-file-clear': () => { S.chatFile = null; renderChatFileChip(); },
+  'att-dl': async (el) => { try { await downloadAttachment(el.dataset.path, el.dataset.name); } catch (e) { toast(errMsg(e), 'error'); } },
+  'att-open': (el) => {
+    const url = S.fileUrls[el.dataset.path];
+    if (!url) return;
+    modal(`<div class="att-view"><img src="${esc(url)}" alt=""><div class="form-actions">
+      <button class="primary" data-action="att-dl" data-path="${esc(el.dataset.path)}" data-name="${esc(el.dataset.name)}">${ic('download')} Télécharger</button>
+      <button data-action="close-modal">Fermer</button></div></div>`);
+  },
   'chat-with': (el) => { S.chatChannel = dmChannel(myKey(), el.dataset.key); go('chat'); },
   'pref-accent-auto': () => { setPref('accent', ''); applyTheme(S.currentTheme); refresh(); },
   'sound-test': () => playSound(null, true),
@@ -2411,16 +2514,26 @@ const FORMS = {
     await loadRefs(); refresh();
   },
   'team-msg': async (f) => {
-    const ta = f.elements.body; const body = ta.value.trim();
-    if (!body) return;
-    ta.value = ''; ta.style.height = '';
-    try { await run(sb.rpc('send_team_message', { p_channel: S.chatChannel || 'general', p_body: body })); } catch (e) { ta.value = body; toast(errMsg(e), 'error'); }
+    const ta = f.elements.body; const body = ta.value.trim(); const file = S.chatFile;
+    if (!body && !file) return;
+    if (S.chatSending) return;
+    S.chatSending = true;
+    const btn = f.querySelector('button[type="submit"]'); if (btn) btn.disabled = true;
+    ta.value = '';
+    try {
+      let meta = null;
+      if (file) { toast('Envoi de ' + file.name + '…'); meta = await uploadChatFile(file); }
+      await run(sb.rpc('send_team_message', { p_channel: S.chatChannel || 'general', p_body: body, p_file: meta }));
+      S.chatFile = null; renderChatFileChip();
+    } catch (e) { ta.value = body; toast(errMsg(e), 'error'); }
+    S.chatSending = false; if (btn) btn.disabled = false;
+    if (ta.focus) ta.focus();
   },
   profile: async (f) => {
     const o = formData(f);
     try {
       await run(sb.rpc('set_my_profile', { p: { tagline: o.tagline, bio: o.bio, games: o.games, discord: o.discord, color: o.color, banner_url: S.editBanner || '' } }));
-      await loadProfiles();
+      await loadProfiles(true);
       closeModal(); toast('Profil enregistré');
       if (S.view === 'profiles') refresh();
     } catch (e) { toast(errMsg(e), 'error'); }
@@ -2514,6 +2627,7 @@ const CHANGES = {
     el.disabled = true;
     try { await window.desktop.setBanner(await fileToDataUrl(file)); await initBanner(); toast('Bannière appliquée'); refresh(); } catch (e) { toast(errMsg(e), 'error'); el.disabled = false; }
   },
+  'chat-file': (el) => { setChatFile(el.files && el.files[0]); el.value = ''; },
   pref: (el) => {
     const k = el.dataset.key; const t = el.dataset.type;
     let v = el.value;
@@ -2562,6 +2676,18 @@ document.addEventListener('click', (e) => {
 document.addEventListener('submit', (e) => {
   const f = e.target.closest('form[data-form]');
   if (f && FORMS[f.dataset.form]) { e.preventDefault(); FORMS[f.dataset.form](f, e.submitter); }
+});
+document.addEventListener('dragover', (e) => { if (e.target.closest && e.target.closest('.tchat-main')) e.preventDefault(); });
+document.addEventListener('drop', (e) => {
+  if (!e.target.closest || !e.target.closest('.tchat-main')) return;
+  e.preventDefault();
+  const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+  if (f) setChatFile(f);
+});
+document.addEventListener('paste', (e) => {
+  if (!e.target.closest || !e.target.closest('.tchat-form')) return;
+  const f = e.clipboardData && e.clipboardData.files && e.clipboardData.files[0];
+  if (f) { e.preventDefault(); setChatFile(f); }
 });
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && !e.shiftKey && e.target.closest && e.target.closest('.tchat-form')) {

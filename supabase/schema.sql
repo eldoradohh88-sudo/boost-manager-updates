@@ -1050,6 +1050,67 @@ begin
 end $$;
 
 -- ---------------------------------------------------------------------
+-- PIÈCES JOINTES DE LA MESSAGERIE (v3.2)
+-- ---------------------------------------------------------------------
+alter table public.team_messages add column if not exists file_path text;
+alter table public.team_messages add column if not exists file_name text;
+alter table public.team_messages add column if not exists file_type text;
+alter table public.team_messages add column if not exists file_size bigint;
+alter table public.team_messages drop constraint if exists team_messages_body_check;
+alter table public.team_messages drop constraint if exists team_messages_body_or_file;
+alter table public.team_messages add constraint team_messages_body_or_file
+  check (length(body) <= 2000 and (length(trim(body)) > 0 or file_path is not null));
+
+-- dossier de stockage privé : seuls les membres de l'équipe peuvent lire (liens temporaires), 25 Mo max
+do $$
+begin
+  if exists (select 1 from information_schema.tables where table_schema = 'storage' and table_name = 'buckets') then
+    insert into storage.buckets (id, name, public, file_size_limit)
+    values ('attachments', 'attachments', false, 26214400)
+    on conflict (id) do update set public = false, file_size_limit = 26214400;
+    execute 'drop policy if exists attachments_insert_own on storage.objects';
+    execute $p$create policy attachments_insert_own on storage.objects for insert to authenticated
+      with check (bucket_id = 'attachments' and (storage.foldername(name))[1] = auth.uid()::text and public.has_access())$p$;
+    execute 'drop policy if exists attachments_read_team on storage.objects';
+    execute $p$create policy attachments_read_team on storage.objects for select to authenticated
+      using (bucket_id = 'attachments' and public.has_access())$p$;
+  end if;
+exception when insufficient_privilege then
+  raise notice 'Stockage : droits insuffisants, crée le bucket « attachments » (privé) à la main.';
+end $$;
+
+create or replace function public.send_team_message(p_channel text, p_body text, p_file jsonb default null) returns bigint
+language plpgsql security definer set search_path = public as $$
+declare k text := public.my_key(); parts text[]; nm text; new_id bigint;
+        f_path text := nullif(p_file ->> 'path', ''); f_name text := left(nullif(p_file ->> 'name', ''), 200);
+begin
+  if not public.has_access() or k is null then raise exception 'Accès refusé'; end if;
+  if coalesce(trim(p_body), '') = '' and f_path is null then raise exception 'Message vide'; end if;
+  if f_path is not null and (position(auth.uid()::text || '/' in f_path) <> 1 or f_path like '%..%') then
+    raise exception 'Pièce jointe invalide';
+  end if;
+  if f_name ~* '\.(exe|bat|cmd|com|scr|msi|ps1|vbs|js|jar|lnk|reg|hta)$' then
+    raise exception 'Ce type de fichier est bloqué pour la sécurité de l''équipe';
+  end if;
+  if p_channel <> 'general' then
+    if p_channel not like 'dm:%' then raise exception 'Salon inconnu'; end if;
+    parts := string_to_array(substr(p_channel, 4), ':');
+    if array_length(parts, 1) <> 2 or not (k = any (parts)) or parts[1] >= parts[2] then raise exception 'Conversation invalide'; end if;
+    if not exists (select 1 from (select 'owner' as kk union all select id::text from boosters where active) m
+                   where m.kk = case when parts[1] = k then parts[2] else parts[1] end) then
+      raise exception 'Destinataire inconnu';
+    end if;
+  end if;
+  nm := case when k = 'owner' then 'Flowey' else (select name from boosters where id::text = k) end;
+  insert into team_messages (channel, author_key, author_name, body, file_path, file_name, file_type, file_size)
+  values (p_channel, k, nm, left(trim(coalesce(p_body, '')), 2000), f_path, f_name,
+          left(nullif(p_file ->> 'type', ''), 100), nullif(p_file ->> 'size', '')::bigint)
+  returning id into new_id;
+  return new_id;
+end $$;
+drop function if exists public.send_team_message(text, text);
+
+-- ---------------------------------------------------------------------
 -- RENOMMER / SUPPRIMER UN BOOSTER (v2.6)
 -- ---------------------------------------------------------------------
 create or replace function public.admin_rename_booster(p_id uuid, p_name text) returns void
@@ -1092,7 +1153,7 @@ begin
   foreach f in array array['my_access()','claim_admin()','activate_license(text)',
       'admin_create_license(uuid,int,text)','admin_extend_license(text,int)','set_my_availability(text)','set_my_payout(text,text)',
       'booster_set_stage(uuid,text)','my_orders()','my_order(uuid)','my_summary()','team_wallet()',
-      'admin_dashboard(int,int)','set_my_avatar(text)','team_avatars()','admin_rename_booster(uuid,text)','admin_delete_booster(uuid)','set_my_profile(jsonb)','team_profiles()','send_team_message(text,text)','my_key()'] loop
+      'admin_dashboard(int,int)','set_my_avatar(text)','team_avatars()','admin_rename_booster(uuid,text)','admin_delete_booster(uuid)','set_my_profile(jsonb)','team_profiles()','send_team_message(text,text,jsonb)','my_key()'] loop
     execute format('revoke execute on function public.%s from public, anon', f);
     execute format('grant execute on function public.%s to authenticated', f);
   end loop;

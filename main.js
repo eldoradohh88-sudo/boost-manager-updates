@@ -95,6 +95,12 @@ function setupUpdater() {
   ipcMain.handle('updater-install', () => autoUpdater.quitAndInstall(false, true));
 }
 ipcMain.handle('app-version', () => app.getVersion());
+// téléchargement d'une pièce jointe (Windows demande où l'enregistrer)
+ipcMain.handle('download-url', (_e, url) => {
+  if (typeof url !== 'string' || !/^https:\/\/[a-z0-9-]+\.supabase\.co\//i.test(url)) return false;
+  if (win && !win.isDestroyed()) win.webContents.downloadURL(url);
+  return true;
+});
 ipcMain.handle('set-zoom', (_e, f) => {
   const z = Math.min(1.4, Math.max(0.75, Number(f) || 1));
   if (win && !win.isDestroyed()) win.webContents.setZoomFactor(z);

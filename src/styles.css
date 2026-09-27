@@ -74,9 +74,9 @@ body.has-banner::before, body.has-banner::after { opacity: .5; }
 @property --accent-glow { syntax: '<color>'; inherits: true; initial-value: hsl(212 80% 62% / .32); }
 @property --accent-b { syntax: '<color>'; inherits: true; initial-value: hsl(45 75% 62%); }
 @property --accent-b-soft { syntax: '<color>'; inherits: true; initial-value: hsl(45 75% 62% / .16); }
-:root { transition: --bg-1 1.6s ease, --bg-2 1.6s ease, --panel 1.6s ease, --panel-2 1.6s ease, --line 1.6s ease,
-  --accent 1.6s ease, --accent-2 1.6s ease, --accent-soft 1.6s ease, --accent-line 1.6s ease, --accent-glow 1.6s ease,
-  --accent-b 1.6s ease, --accent-b-soft 1.6s ease; }
+:root { transition: --bg-1 1s ease, --bg-2 1s ease, --panel 1s ease, --panel-2 1s ease, --line 1s ease,
+  --accent 1s ease, --accent-2 1s ease, --accent-soft 1s ease, --accent-line 1s ease, --accent-glow 1s ease,
+  --accent-b 1s ease, --accent-b-soft 1s ease; }
 
 h1, h2, h3 { margin: 0; font-family: var(--font-title); }
 h1 { font-size: 28px; font-weight: 700; letter-spacing: -.02em; }
@@ -526,3 +526,28 @@ body.extra-round button, body.extra-round .btn, body.extra-round input, body.ext
 .tchat-form textarea { flex: 1; resize: none; min-height: 44px; max-height: 160px; }
 .nav-badge { margin-left: auto; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 99px; background: var(--bad); color: #fff;
   font-size: 11px; font-weight: 700; display: inline-grid; place-items: center; }
+
+/* ---------- chargement des pages ---------- */
+.view.stale { opacity: .55; pointer-events: none; transition: opacity .15s; }
+.skeleton { display: grid; gap: 16px; }
+.skeleton div { height: 110px; border-radius: 14px; background: linear-gradient(90deg, var(--panel) 25%, var(--panel-2) 50%, var(--panel) 75%);
+  background-size: 200% 100%; animation: shimmer 1.2s linear infinite; }
+.skeleton div:first-child { height: 54px; width: 40%; }
+@keyframes shimmer { to { background-position: -200% 0; } }
+
+/* ---------- pièces jointes ---------- */
+.att-btn { padding: 10px 12px; font-size: 17px; line-height: 1; cursor: pointer; }
+#tchat-file:empty { display: none; }
+#tchat-file { padding: 10px 14px 0; }
+.att-chip { display: inline-flex; align-items: center; gap: 10px; padding: 6px 8px 6px 12px; border-radius: 10px;
+  background: var(--accent-soft); border: 1px solid var(--accent-line); max-width: 100%; }
+.att-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.att-img { display: block; padding: 0; margin-top: 6px; border: 0; background: none; border-radius: 10px; overflow: hidden; cursor: zoom-in; max-width: 320px; }
+.att-img:hover { transform: none; box-shadow: 0 0 0 2px var(--accent); }
+.att-img img { display: block; max-width: 320px; max-height: 260px; object-fit: cover; }
+.att-file { display: flex; align-items: center; gap: 10px; margin-top: 6px; padding: 8px 10px; border-radius: 10px;
+  background: var(--field); border: 1px solid var(--line); min-width: 220px; }
+.att-meta { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.att-meta b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.att-view { text-align: center; }
+.att-view img { max-width: 100%; max-height: 70vh; border-radius: 12px; }
