@@ -484,7 +484,7 @@ async function initBanner() {
   if (!pf.bannerColors) { applyTheme(S.baseTheme); return; } // l'utilisateur garde les couleurs du logo
   const start = performance.now();
   let tl = null;
-  if (pf.effects) {
+  if (!S.safeMode) { // le suivi des couleurs du GIF marche même si les effets visuels sont coupés
     await new Promise((r) => setTimeout(r, 800)); // on laisse l'app s'afficher d'abord
     try { tl = await bannerTimeline(url, ctx); } catch (_) { tl = null; }
   }

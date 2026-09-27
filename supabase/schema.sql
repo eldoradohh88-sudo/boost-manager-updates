@@ -1188,3 +1188,11 @@ begin
     execute format('grant execute on function public.%s to authenticated', f);
   end loop;
 end $$;
+
+-- ---------------------------------------------------------------------
+-- DROITS : toutes les fonctions de l'app utilisables par les comptes connectés
+-- (chaque fonction vérifie elle-même la licence / le rôle admin)
+-- ---------------------------------------------------------------------
+grant execute on all functions in schema public to authenticated;
+alter default privileges in schema public grant execute on functions to authenticated;
+notify pgrst, 'reload schema';
