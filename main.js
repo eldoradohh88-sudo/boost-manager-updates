@@ -9,12 +9,18 @@ if (!app.requestSingleInstanceLock()) {
   app.quit();
 }
 
+const fs = require('fs');
 let win;
+
+// logo : celui choisi par l'utilisateur sur ce PC (Paramètres / Ma licence), sinon celui de l'app
+const customLogoPath = () => path.join(app.getPath('userData'), 'custom-logo.png');
+const hasCustomLogo = () => { try { return fs.existsSync(customLogoPath()); } catch (_) { return false; } };
+const logoPath = () => (hasCustomLogo() ? customLogoPath() : path.join(__dirname, 'src', 'logo.png'));
 
 // logo recadré en carré (centre de l'image) pour l'icône de la fenêtre et de la barre des tâches
 function squareLogo() {
   try {
-    const img = nativeImage.createFromPath(path.join(__dirname, 'src', 'logo.png'));
+    const img = nativeImage.createFromPath(logoPath());
     if (img.isEmpty()) return null;
     const { width, height } = img.getSize();
     const side = Math.min(width, height);
@@ -85,10 +91,10 @@ ipcMain.handle('app-version', () => app.getVersion());
 
 // couleurs de l'app tirées automatiquement de src/logo.png
 let themeCache;
-ipcMain.handle('theme', () => {
+function computeTheme() {
   if (themeCache !== undefined) return themeCache;
   try {
-    const img = nativeImage.createFromPath(path.join(__dirname, 'src', 'logo.png'));
+    const img = nativeImage.createFromPath(logoPath());
     if (img.isEmpty()) return (themeCache = null);
     const small = img.resize({ width: 64, height: 64, quality: 'good' });
     const { width, height } = small.getSize();
@@ -97,6 +103,32 @@ ipcMain.handle('theme', () => {
     themeCache = null;
   }
   return themeCache;
+}
+ipcMain.handle('theme', () => computeTheme());
+
+// logo affiché dans l'app (carré 256 px, en data URL)
+function logoInfo() {
+  const sq = squareLogo();
+  return { url: sq ? sq.toDataURL() : null, custom: hasCustomLogo() };
+}
+function logoChanged() {
+  themeCache = undefined;
+  const sq = squareLogo();
+  if (sq && win && !win.isDestroyed()) win.setIcon(sq);
+  return { ...logoInfo(), theme: computeTheme() };
+}
+ipcMain.handle('logo-get', () => logoInfo());
+ipcMain.handle('logo-set', (_e, dataUrl) => {
+  if (typeof dataUrl !== 'string' || !dataUrl.startsWith('data:image/png;base64,') || dataUrl.length > 4 * 1024 * 1024) throw new Error('Image invalide');
+  const img = nativeImage.createFromDataURL(dataUrl);
+  if (img.isEmpty()) throw new Error('Image illisible');
+  fs.mkdirSync(app.getPath('userData'), { recursive: true });
+  fs.writeFileSync(customLogoPath(), img.toPNG());
+  return logoChanged();
+});
+ipcMain.handle('logo-reset', () => {
+  try { fs.unlinkSync(customLogoPath()); } catch (_) { /* déjà retiré */ }
+  return logoChanged();
 });
 
 /* ---------------- Eldorado (espace admin) ----------------

@@ -143,19 +143,58 @@ const ICONS = {
 };
 const ic = (name) => `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true">${ICONS[name] || ''}</svg>`;
 /* ---------------- thème (couleurs tirées de logo.png) ---------------- */
+let themeKeys = [];
 function applyTheme(vars) {
-  if (!vars || typeof vars !== 'object') return;
   const root = document.documentElement;
-  Object.keys(vars).forEach((k) => { if (/^--[a-z0-9-]+$/.test(k)) root.style.setProperty(k, String(vars[k])); });
+  themeKeys.forEach((k) => root.style.removeProperty(k)); // on repart du thème par défaut
+  themeKeys = [];
+  if (!vars || typeof vars !== 'object') return;
+  Object.keys(vars).forEach((k) => { if (/^--[a-z0-9-]+$/.test(k)) { root.style.setProperty(k, String(vars[k])); themeKeys.push(k); } });
 }
+const logoSrc = () => S.logoUrl || 'logo.png';
 async function initTheme() {
   try { applyTheme(JSON.parse(localStorage.getItem('bm_theme') || 'null')); } catch (_) { /* rien */ }
   if (!window.desktop || !window.desktop.theme) return;
+  try { const l = await window.desktop.logo(); S.logoUrl = l.url; S.customLogo = l.custom; } catch (_) { /* logo par défaut */ }
   try {
     const vars = await window.desktop.theme();
     if (vars) { applyTheme(vars); try { localStorage.setItem('bm_theme', JSON.stringify(vars)); } catch (_) { /* rien */ } }
     else { try { localStorage.removeItem('bm_theme'); } catch (_) { /* rien */ } }
   } catch (_) { /* thème par défaut */ }
+}
+
+/* ---------------- logo personnel (propre à chaque PC) ---------------- */
+function logoCard() {
+  if (!window.desktop || !window.desktop.setLogo) return '';
+  return `<div class="card"><div class="card-head"><h2>${ic('sparkles')} Logo de mon app</h2></div>
+    <div class="avatar-edit"><img class="logo" style="width:96px;height:96px" src="${logoSrc()}" alt="">
+      <div><p class="muted small">Choisis n'importe quelle image : l'app prend ton logo <b>et ses couleurs</b>, et la fenêtre prend son icône. Ça ne change que chez toi, pas chez le reste de l'équipe.</p>
+      <label class="btn primary">${ic('download')} Choisir un logo<input type="file" accept="image/*" data-change="logo-file" hidden></label>
+      ${S.customLogo ? '<button class="ghost" data-action="logo-reset">Revenir au logo de base</button>' : ''}</div></div></div>`;
+}
+function logoToPng(file) {
+  return new Promise((resolve, reject) => {
+    if (!file || !/^image\//.test(file.type)) return reject(new Error('Ce fichier n\'est pas une image.'));
+    if (file.size > 25 * 1024 * 1024) return reject(new Error('Image trop lourde (25 Mo max).'));
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const size = 512; const c = document.createElement('canvas'); c.width = size; c.height = size;
+      const side = Math.min(img.naturalWidth, img.naturalHeight);
+      const ctx = c.getContext('2d'); ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(img, (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2, side, side, 0, 0, size, size);
+      URL.revokeObjectURL(url);
+      resolve(c.toDataURL('image/png'));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Image illisible.')); };
+    img.src = url;
+  });
+}
+function logoApplied(r) {
+  S.logoUrl = r.url; S.customLogo = r.custom;
+  applyTheme(r.theme);
+  try { if (r.theme) localStorage.setItem('bm_theme', JSON.stringify(r.theme)); else localStorage.removeItem('bm_theme'); } catch (_) { /* rien */ }
+  document.querySelectorAll('img.logo').forEach((el) => { el.src = logoSrc(); });
 }
 
 /* ---------------- photos de profil ---------------- */
@@ -270,7 +309,7 @@ async function boot() {
   await initTheme();
   if (!window.supabase || !CFG.SUPABASE_URL || /COLLE/.test(CFG.SUPABASE_URL + CFG.SUPABASE_ANON_KEY)) {
     $('#app').innerHTML = `<div class="center-screen"><div class="auth-card">
-      <div class="brand"><img class="logo" src="logo.png" alt="Flowey's Software Manager"><h1>Configuration requise</h1></div>
+      <div class="brand"><img class="logo" src="${logoSrc()}" alt="Flowey's Software Manager"><h1>Configuration requise</h1></div>
       <p class="muted">${window.supabase ? 'Ouvre le fichier <b>src/config.js</b> avec le Bloc-notes, colle l\'URL et la clé de ton projet Supabase (GUIDE, étape 4), enregistre, puis relance.'
     : 'Il manque des fichiers : double-clique sur <b>1-INSTALLER.bat</b> dans le dossier du projet, puis relance.'}</p>
       </div></div>`;
@@ -324,7 +363,7 @@ setInterval(async () => {
 /* ---------------- connexion ---------------- */
 function renderAuth(error = '') {
   $('#app').innerHTML = `<div class="center-screen"><form class="auth-card" data-form="login">
-    <div class="brand"><img class="logo" src="logo.png" alt="Flowey's Software Manager"><div><h1>Flowey's Software Manager</h1>
+    <div class="brand"><img class="logo" src="${logoSrc()}" alt="Flowey's Software Manager"><div><h1>Flowey's Software Manager</h1>
     <div class="muted small">Commandes · Équipe · Wallet</div></div></div>
     ${field('Email', '<input name="email" type="email" required autofocus>')}
     ${field('Mot de passe', '<input name="password" type="password" required minlength="6">')}
@@ -365,7 +404,7 @@ function renderGate(error = '') {
   const a = S.access || {};
   if (a.admin_exists === false) {
     $('#app').innerHTML = `<div class="center-screen"><div class="auth-card">
-      <div class="brand"><img class="logo" src="logo.png" alt="Flowey's Software Manager"><h1>Bienvenue !</h1></div>
+      <div class="brand"><img class="logo" src="${logoSrc()}" alt="Flowey's Software Manager"><h1>Bienvenue !</h1></div>
       <p class="muted">Aucun admin n'existe encore. Si tu es <b>Flowey</b> (le propriétaire), clique ci-dessous pour devenir admin.
       Ce bouton ne fonctionne qu'une seule fois : ensuite, plus personne ne peut devenir admin.</p>
       <div class="form-actions"><button class="primary" data-action="claim-admin">Je suis Flowey : devenir admin</button>
@@ -380,7 +419,7 @@ function renderGate(error = '') {
     revoked: 'Ta licence a été désactivée. Contacte Flowey.',
   }[a.status] || 'Licence requise.';
   $('#app').innerHTML = `<div class="center-screen"><form class="auth-card" data-form="activate">
-    <div class="brand"><img class="logo" src="logo.png" alt="Flowey's Software Manager"><h1>Licence</h1></div>
+    <div class="brand"><img class="logo" src="${logoSrc()}" alt="Flowey's Software Manager"><h1>Licence</h1></div>
     <p class="muted">${esc(msg)}</p>
     ${field('Clé de licence', '<input name="key" class="key-input" placeholder="BOOST-XXXX-XXXX-XXXX-XXXX" required autofocus>')}
     <div class="form-actions">
@@ -423,7 +462,7 @@ function renderShell(view) {
   const sub = isAdmin() ? 'Admin' : `Licence jusqu'au ${fdate(S.access.expires_at)}`;
   $('#app').innerHTML = `<div class="shell">
     <aside class="sidebar">
-      <div class="brand"><div style="display:flex;align-items:center;gap:12px"><img class="logo" src="logo.png" alt="Flowey's Software Manager">
+      <div class="brand"><div style="display:flex;align-items:center;gap:12px"><img class="logo" src="${logoSrc()}" alt="Flowey's Software Manager">
         <div><b>Flowey's Software Manager</b><div class="muted small">${isAdmin() ? 'Espace admin' : 'Espace booster'} <span id="app-version"></span></div></div></div>
         <button class="ghost bell" id="bell" data-action="nav" data-view="notifs" title="Notifications">${ic('bell')}<span class="dot hidden" id="notif-dot"></span></button></div>
       ${nav.map(([group, items]) => `<div class="nav-group">${group}</div>
@@ -1475,12 +1514,12 @@ async function viewLicenses(main) {
 
 async function viewSettings(main) {
   await loadRefs();
-  main.innerHTML = `${head('Paramètres', 'Taux Eldorado, règles de partage et photo de profil')}
+  main.innerHTML = `${head('Paramètres', 'Taux Eldorado, règles de partage, photo et logo')}
+  ${logoCard()}
   <div class="card"><div class="card-head"><h2>${ic('users')} Photo de profil</h2></div>
     <div class="avatar-edit">${avatarHtml(myName(), 'lg')}<div><p class="muted small">Toute l'équipe voit ta photo (menu, équipe, chat, wallet).</p>
     <button class="primary" data-action="avatar">${ic('download')} Changer ma photo</button></div></div></div>
-  <div class="card"><div class="card-head"><h2>${ic('sparkles')} Couleurs de l'app</h2></div>
-    <p class="muted small">Les couleurs viennent automatiquement de ton <b>logo.png</b> (dossier <b>src</b>). Change le logo, rebuild l'exe : toute l'app prend ses couleurs.</p></div>
+  
   <div class="grid-2">
     <div class="card"><div class="card-head"><h2>Frais Eldorado</h2></div>
       <p class="muted small">Chaque commande prend le taux en vigueur à sa date. Pour un nouveau taux, ajoute une date d'effet : les anciennes commandes ne changent pas.</p>
@@ -1594,6 +1633,7 @@ async function viewLicense(main) {
     <div class="form-grid">${field('Clé', '<input name="key" class="key-input" required placeholder="BOOST-XXXX-XXXX-XXXX-XXXX">', 'class="field span-2"')}</div>
     <div class="form-actions"><button class="primary" type="submit">Activer</button>
     <span class="muted small">Le temps s'ajoute à ta licence actuelle.</span></div></form>
+  ${logoCard()}
   <div class="card"><div class="card-head"><h2>${ic('users')} Photo de profil</h2></div>
     <div class="avatar-edit">${avatarHtml(myName(), 'lg')}<div><p class="muted small">Toute l'équipe voit ta photo (menu, équipe, chat, wallet).</p>
     <button class="primary" data-action="avatar">${ic('download')} Changer ma photo</button></div></div></div>`;
@@ -1616,6 +1656,7 @@ const ACTIONS = {
   nav: (el) => go(el.dataset.view),
   logout: () => logout(),
   avatar: () => openAvatar(),
+  'logo-reset': async () => { try { logoApplied(await window.desktop.resetLogo()); toast('Logo de base remis'); refresh(); } catch (e) { toast(errMsg(e), 'error'); } },
   'avatar-remove': async () => {
     try { await run(sb.rpc('set_my_avatar', { p_url: null })); await loadAvatars(); refreshMyAvatar(); closeModal(); toast('Photo retirée'); if (S.view === 'settings' || S.view === 'license') refresh(); } catch (e) { toast(errMsg(e), 'error'); }
   },
@@ -1823,6 +1864,12 @@ const CHANGES = {
     if (!f || !url || f.elements.ref.value) return;
     const m = url.replace(/[?#].*$/, '').match(/([A-Za-z0-9_-]{5,})\/?$/);
     if (m) f.elements.ref.value = m[1];
+  },
+  'logo-file': async (el) => {
+    const file = el.files && el.files[0];
+    if (!file) return;
+    el.disabled = true;
+    try { logoApplied(await window.desktop.setLogo(await logoToPng(file))); toast('Nouveau logo appliqué'); refresh(); } catch (e) { toast(errMsg(e), 'error'); el.disabled = false; }
   },
   'avatar-file': async (el) => {
     const file = el.files && el.files[0];
