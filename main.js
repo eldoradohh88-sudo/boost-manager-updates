@@ -162,6 +162,20 @@ function shortcutPaths() {
   }
   return out;
 }
+let lastIco = null;
+function setTaskbarIcon(icoPath) {
+  if (process.platform !== 'win32' || !win || win.isDestroyed()) return;
+  lastIco = icoPath || lastIco;
+  try {
+    win.setAppDetails({
+      appId: 'com.flowey.boostmanager',
+      appIconPath: lastIco || process.execPath, appIconIndex: 0,
+      relaunchCommand: `"${process.execPath}"`, relaunchDisplayName: "Flowey's Software Manager",
+    });
+  } catch (_) { /* rien */ }
+  const sq = squareLogo();
+  if (sq) win.setIcon(sq);
+}
 function applyShortcutIcons() {
   if (process.platform !== 'win32' || !app.isPackaged) return 0;
   let icon = process.execPath; // logo de base de l'app
@@ -183,6 +197,8 @@ function applyShortcutIcons() {
       if (shell.writeShortcutLink(lnk, 'update', { icon, iconIndex: 0 })) done++;
     } catch (_) { /* raccourci inaccessible : on passe */ }
   }
+  // bouton de l'app dans la barre des tâches (fenêtre ouverte)
+  setTaskbarIcon(icon);
   // demande à Windows de rafraîchir ses icônes
   try { require('child_process').spawn('ie4uinit.exe', ['-show'], { detached: true, stdio: 'ignore', windowsHide: true }).unref(); } catch (_) { /* rien */ }
   return done;
@@ -266,6 +282,6 @@ app.setAppUserModelId('com.flowey.boostmanager'); // nécessaire aux notificatio
 app.whenReady().then(() => {
   createWindow();
   // après une mise à jour, Windows remet l'icône de base sur les raccourcis : on remet celle de l'utilisateur
-  if (hasCustomLogo()) setTimeout(() => { try { applyShortcutIcons(); } catch (_) { /* rien */ } }, 3000);
+  if (hasCustomLogo()) setTimeout(() => { try { applyShortcutIcons(); } catch (_) { /* rien */ } }, 1500);
 });
 app.on('window-all-closed', () => app.quit());

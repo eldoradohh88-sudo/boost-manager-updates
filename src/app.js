@@ -121,6 +121,12 @@ const ICONS = {
   megaphone: '<path d="M3 11v3a1 1 0 0 0 1 1h2l5 4V6L6 10H4a1 1 0 0 0-1 1z"/><path d="M15 8.5a5 5 0 0 1 0 7"/><path d="M18 5.5a9 9 0 0 1 0 13"/>',
   trophy: '<path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3"/>',
   send: '<path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4z"/>',
+  clip: '<path d="m21 11-8.5 8.5a5.5 5.5 0 0 1-7.8-7.8l9-9a3.7 3.7 0 0 1 5.2 5.2l-9 9a1.8 1.8 0 0 1-2.6-2.6l8.3-8.3"/>',
+  smile: '<circle cx="12" cy="12" r="9"/><path d="M8.5 14.5a4.5 4.5 0 0 0 7 0"/><path d="M9 9.5h.01M15 9.5h.01"/>',
+  mic: '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3"/>',
+  stop: '<rect x="6" y="6" width="12" height="12" rx="2"/>',
+  volume: '<path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/>',
+  file: '<path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8z"/><path d="M14 3v5h5"/>',
   download: '<path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/>',
   key: '<circle cx="7.5" cy="15.5" r="4.5"/><path d="m10.7 12.3 8.8-8.8"/><path d="m16 7 3 3"/><path d="m18.5 4.5 2 2"/>',
   settings: '<path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/>',
@@ -694,10 +700,77 @@ function startTeamChat() {
 }
 function stopTeamChat() { if (S.teamChannel && sb) { sb.removeChannel(S.teamChannel); S.teamChannel = null; } }
 
+/* ---------------- émojis ---------------- */
+const EMOJIS = {
+  'Smileys': '😀 😁 😂 🤣 😊 😍 😘 😎 🤩 🥳 😏 😅 😇 🙃 😉 😋 😜 🤪 🤔 🤨 😐 😴 😮 😱 😭 😤 😡 🥶 🥵 🤯 😬 🙄 😈 💀 🤡 👻 🤖',
+  'Gestes': '👍 👎 👌 ✌️ 🤞 🤙 👊 ✊ 👏 🙌 🙏 💪 🫡 🤝 👀 🫶 ❤️ 🧡 💛 💚 💙 💜 🖤 💔 💯 🔥 ✨ ⭐ 🎉 🎊',
+  'Gaming': '🎮 🕹️ 🏆 🥇 🥈 🥉 🎯 ⚔️ 🛡️ 🏹 💣 🧨 👑 💎 🚀 ⚡ 🔝 📈 📉 🆙 ✅ ❌ ⏳ ⏰ 💰 💸 💵 🪙 🎁',
+  'Divers': '☕ 🍕 🍔 🍟 🌮 🍺 🍿 🌙 ☀️ 🌈 🌊 🐐 🦊 🐉 🦅 🐺 🐍 📌 📎 📝 🔔 🔕 💬 🗨️ ⚠️ ❓ ❗',
+};
+function renderEmojiPanel() {
+  const box = $('#emoji-panel');
+  if (!box) return;
+  box.innerHTML = Object.entries(EMOJIS).map(([cat, list]) => `<div class="emoji-cat">${esc(cat)}</div>
+    <div class="emoji-grid">${list.split(' ').map((e) => `<button type="button" data-action="emoji" data-e="${e}">${e}</button>`).join('')}</div>`).join('');
+}
+function insertAtCursor(ta, text) {
+  const st = ta.selectionStart ?? ta.value.length; const en = ta.selectionEnd ?? ta.value.length;
+  ta.value = ta.value.slice(0, st) + text + ta.value.slice(en);
+  ta.selectionStart = ta.selectionEnd = st + text.length;
+  ta.focus();
+}
+
+/* ---------------- messages vocaux ---------------- */
+function recTime(ms) { const s0 = Math.floor(ms / 1000); return `${Math.floor(s0 / 60)}:${String(s0 % 60).padStart(2, '0')}`; }
+async function toggleRecording() {
+  const btn = $('#rec-btn');
+  if (S.rec) { S.rec.recorder.stop(); return; }
+  let stream;
+  try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); } catch (_) { return toast('Micro inaccessible : vérifie qu\'un micro est branché et autorisé dans Windows.', 'error'); }
+  const type = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' : 'audio/webm';
+  const recorder = new MediaRecorder(stream, { mimeType: type });
+  const chunks = [];
+  S.rec = { recorder, start: Date.now() };
+  recorder.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
+  recorder.onstop = () => {
+    stream.getTracks().forEach((t) => t.stop());
+    const dur = Date.now() - S.rec.start;
+    clearInterval(S.rec.timer); S.rec = null;
+    const b = $('#rec-btn'); if (b) { b.classList.remove('recording'); b.innerHTML = ic('mic'); }
+    if (dur < 700 || !chunks.length) return;
+    const file = new File(chunks, `vocal-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.webm`, { type: 'audio/webm' });
+    file.vocal = recTime(dur);
+    setChatFile(file);
+  };
+  recorder.start(250);
+  if (btn) { btn.classList.add('recording'); btn.innerHTML = `${ic('stop')}<span id="rec-time">0:00</span>`; }
+  S.rec.timer = setInterval(() => {
+    const el = $('#rec-time'); if (el) el.textContent = recTime(Date.now() - S.rec.start);
+    if (Date.now() - S.rec.start > 120000) S.rec.recorder.stop(); // 2 minutes max
+  }, 250);
+  toast('Enregistrement… reclique sur le bouton pour arrêter (2 min max)');
+}
+
+/* ---------------- lecture à voix haute ---------------- */
+function speak(text) {
+  try {
+    const synth = window.speechSynthesis;
+    if (!synth) return toast('La synthèse vocale n\'est pas disponible sur ce PC.', 'error');
+    if (synth.speaking) { synth.cancel(); return; }
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = 'fr-FR';
+    const v = synth.getVoices().find((x) => /^fr/i.test(x.lang));
+    if (v) u.voice = v;
+    u.volume = Math.max(0.1, Number(prefs().volume) || 0.6);
+    synth.speak(u);
+  } catch (_) { toast('Lecture impossible.', 'error'); }
+}
+
 /* ---------------- pièces jointes de la messagerie ---------------- */
 const BLOCKED_EXT = /\.(exe|bat|cmd|com|scr|msi|ps1|vbs|js|jar|lnk|reg|hta)$/i;
 const fileSize = (b) => { const v = Number(b) || 0; return v < 1024 ? v + ' o' : v < 1048576 ? (v / 1024).toFixed(0) + ' Ko' : (v / 1048576).toFixed(1) + ' Mo'; };
 const isImg = (m) => /^image\/(png|jpe?g|gif|webp|bmp)$/i.test(m.file_type || '');
+const isAudio = (m) => /^audio\//i.test(m.file_type || '') || /\.(webm|ogg|mp3|m4a|wav)$/i.test(m.file_name || '') && /^vocal/i.test(m.file_name || '');
 S.fileUrls = S.fileUrls || {};
 function setChatFile(file) {
   if (!file) return;
@@ -710,7 +783,7 @@ function renderChatFileChip() {
   const box = $('#tchat-file');
   if (!box) return;
   const f = S.chatFile;
-  box.innerHTML = f ? `<div class="att-chip">${ic('download')}<span><b>${esc(f.name)}</b> <span class="muted small">${fileSize(f.size)}</span></span>
+  box.innerHTML = f ? `<div class="att-chip">${ic(f.vocal ? 'mic' : 'clip')}<span><b>${esc(f.vocal ? 'Message vocal · ' + f.vocal : f.name)}</b> <span class="muted small">${fileSize(f.size)}</span></span>
     <button type="button" class="sm ghost" data-action="chat-file-clear" title="Retirer">${ic('x')}</button></div>` : '';
 }
 function attachmentHtml(m) {
@@ -720,12 +793,15 @@ function attachmentHtml(m) {
     return `<button type="button" class="att-img" data-action="att-open" data-path="${esc(m.file_path)}" data-name="${esc(m.file_name || '')}">
       ${url ? `<img src="${esc(url)}" alt="${esc(m.file_name || '')}" loading="lazy">` : '<span class="muted small">Chargement de l\'image…</span>'}</button>`;
   }
-  return `<div class="att-file">${ic('download')}<span class="att-meta"><b>${esc(m.file_name || 'Fichier')}</b><span class="muted small">${fileSize(m.file_size)}</span></span>
+  if (isAudio(m)) {
+    return `<div class="att-audio">${ic('mic')}${url ? `<audio controls preload="metadata" src="${esc(url)}"></audio>` : '<span class="muted small">Chargement du vocal…</span>'}</div>`;
+  }
+  return `<div class="att-file">${ic('file')}<span class="att-meta"><b>${esc(m.file_name || 'Fichier')}</b><span class="muted small">${fileSize(m.file_size)}</span></span>
     <button type="button" class="sm" data-action="att-dl" data-path="${esc(m.file_path)}" data-name="${esc(m.file_name || 'fichier')}">Télécharger</button></div>`;
 }
 // liens temporaires (1 h) pour afficher les images du salon ouvert
 async function resolveAttachments() {
-  const need = [...new Set((S.chatMsgs || []).filter((m) => m.file_path && isImg(m) && !S.fileUrls[m.file_path]).map((m) => m.file_path))];
+  const need = [...new Set((S.chatMsgs || []).filter((m) => m.file_path && (isImg(m) || isAudio(m)) && !S.fileUrls[m.file_path]).map((m) => m.file_path))];
   if (!need.length) return;
   try {
     const { data } = await sb.storage.from('attachments').createSignedUrls(need, 3600);
@@ -751,7 +827,7 @@ async function uploadChatFile(file) {
 
 async function viewChat(main) {
   await Promise.all([loadProfiles(), loadChatSummary()]);
-  if (!main.isConnected) return;
+  if (main.isConnected === false) return;
   S.chatChannel = S.chatChannel || 'general';
   main.innerHTML = `${head('Messages', 'Le groupe général et tes conversations privées')}
     <div class="tchat card">
@@ -761,8 +837,13 @@ async function viewChat(main) {
         <div class="tchat-log" id="tchat-log"><div class="muted">Chargement…</div></div>
         <div id="tchat-file"></div>
         <form class="tchat-form" data-form="team-msg">
-          <label class="btn att-btn" title="Joindre un fichier (25 Mo max)">📎<input type="file" data-change="chat-file" hidden></label>
-          <textarea name="body" rows="1" maxlength="2000" placeholder="Écris un message… (Entrée pour envoyer · glisse ou colle un fichier pour le joindre)"></textarea>
+          <div class="tchat-tools">
+            <label class="btn icon-btn" title="Joindre un fichier (25 Mo max)">${ic('clip')}<input type="file" data-change="chat-file" hidden></label>
+            <button type="button" class="icon-btn" data-action="emoji-toggle" title="Émojis">${ic('smile')}</button>
+            <button type="button" class="icon-btn" id="rec-btn" data-action="rec-toggle" title="Message vocal">${ic('mic')}</button>
+          </div>
+          <div class="emoji-panel hidden" id="emoji-panel"></div>
+          <textarea name="body" rows="1" maxlength="2000" placeholder="Écris un message…"></textarea>
           <button class="primary" type="submit">${ic('send')}</button>
         </form>
       </section>
@@ -820,7 +901,8 @@ function renderTeamLog(keepScroll) {
     const mine = m.author_key === me;
     return `${sep}<div class="msg-line ${mine ? 'mine' : ''}">${avatarHtml(m.author_name, 'sm')}<div class="msg">
       <div class="who">${esc(m.author_name)} · ${new Date(m.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</div>
-      ${m.body ? `<div class="txt">${esc(m.body)}</div>` : ''}${attachmentHtml(m)}</div></div>`;
+      ${m.body ? `<div class="txt">${esc(m.body)}</div>` : ''}${attachmentHtml(m)}
+      ${m.body ? `<button type="button" class="tts-btn" data-action="tts" data-text="${esc(m.body)}" title="Lire à voix haute">${ic('volume')}</button>` : ''}</div></div>`;
   }).join('') : emptyBox(S.chatChannel === 'general' ? 'Aucun message. Dis bonjour à l\'équipe !' : 'Aucun message. Lance la conversation !', 'send');
   if (!keepScroll || atBottom) log.scrollTop = log.scrollHeight;
   if (!keepScroll) resolveAttachments();
@@ -2324,6 +2406,10 @@ const ACTIONS = {
   avatar: () => openAvatar(),
   'chat-open': (el) => openChannel(el.dataset.ch),
   'chat-file-clear': () => { S.chatFile = null; renderChatFileChip(); },
+  'emoji-toggle': () => { const p0 = $('#emoji-panel'); if (!p0) return; if (!p0.innerHTML) renderEmojiPanel(); p0.classList.toggle('hidden'); },
+  emoji: (el) => { const ta = document.querySelector('.tchat-form textarea'); if (ta) insertAtCursor(ta, el.dataset.e); },
+  'rec-toggle': () => toggleRecording(),
+  tts: (el) => speak(el.dataset.text),
   'att-dl': async (el) => { try { await downloadAttachment(el.dataset.path, el.dataset.name); } catch (e) { toast(errMsg(e), 'error'); } },
   'att-open': (el) => {
     const url = S.fileUrls[el.dataset.path];
@@ -2525,6 +2611,7 @@ const FORMS = {
       if (file) { toast('Envoi de ' + file.name + '…'); meta = await uploadChatFile(file); }
       await run(sb.rpc('send_team_message', { p_channel: S.chatChannel || 'general', p_body: body, p_file: meta }));
       S.chatFile = null; renderChatFileChip();
+      const ep = $('#emoji-panel'); if (ep) ep.classList.add('hidden');
     } catch (e) { ta.value = body; toast(errMsg(e), 'error'); }
     S.chatSending = false; if (btn) btn.disabled = false;
     if (ta.focus) ta.focus();
@@ -2651,7 +2738,7 @@ const CHANGES = {
     const file = el.files && el.files[0];
     if (!file) return;
     el.disabled = true;
-    try { const r = await window.desktop.setLogo(await logoToPng(file)); logoApplied(r); toast(r.shortcuts ? `Nouveau logo appliqué (app + ${r.shortcuts} raccourci${r.shortcuts > 1 ? 's' : ''} : barre des tâches, bureau…)` : 'Nouveau logo appliqué'); refresh(); } catch (e) { toast(errMsg(e), 'error'); el.disabled = false; }
+    try { const r = await window.desktop.setLogo(await logoToPng(file)); logoApplied(r); toast(`Nouveau logo appliqué · ${n(r.shortcuts)} raccourci${n(r.shortcuts) > 1 ? 's' : ''} Windows mis à jour (barre des tâches, bureau, menu Démarrer)`); refresh(); } catch (e) { toast(errMsg(e), 'error'); el.disabled = false; }
   },
   'avatar-file': async (el) => {
     const file = el.files && el.files[0];
