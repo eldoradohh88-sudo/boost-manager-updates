@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Flowey's Software Manager — Tuto</title>
+<style>
+  :root { --bg:#f7f6fb; --card:#fff; --text:#1d1b2e; --muted:#5f5c78; --line:#e4e2ef; --sakura:#d9678f; --sakura-bg:#fdf0f5; --ink:#2b2750; --red:#c83b52; --green:#1f8a5b; --amber:#b7791f; }
+  * { box-sizing: border-box; }
+  .muted { color:var(--muted); font-size:14px; }
+  body { margin:0; background:var(--bg); color:var(--text); font:16px/1.65 "Segoe UI", system-ui, Arial, sans-serif; }
+  .wrap { max-width: 880px; margin: 0 auto; padding: 36px 22px 90px; }
+  header { display:flex; gap:16px; align-items:center; }
+  .logo { width:60px; height:60px; border-radius:50%; object-fit:cover; }
+  h1 { margin:0; font:600 30px "Yu Mincho", Georgia, serif; }
+  .kicker { color:var(--sakura); letter-spacing:.35em; font:13px "Yu Mincho", serif; }
+  .lead { color:var(--muted); margin: 10px 0 26px; }
+  nav { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:14px 18px; margin-bottom:30px; }
+  nav a { color:var(--ink); text-decoration:none; display:inline-block; margin:2px 16px 2px 0; border-bottom:1px solid #d9d6ea; }
+  h2 { margin: 46px 0 8px; font:600 23px "Yu Mincho", Georgia, serif; display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; }
+  h2 .jp { font-size:15px; color:var(--sakura); letter-spacing:.2em; }
+  h2 small { font:400 15px "Segoe UI", sans-serif; color:var(--muted); }
+  .step { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:18px 22px 16px 70px; margin:14px 0; position:relative; }
+  .step::before { content: attr(data-n); position:absolute; left:20px; top:17px; width:34px; height:34px; border-radius:50%; border:1.5px solid var(--sakura); color:var(--sakura); font:700 16px "Yu Mincho", serif; display:grid; place-items:center; }
+  .step h3 { margin:0 0 6px; font-size:18px; }
+  .step ol, .step ul { margin: 6px 0; padding-left: 22px; }
+  .step li { margin: 4px 0; }
+  .big { border:2px solid var(--sakura); background:var(--sakura-bg); }
+  b.btn { display:inline-block; background:#efedf7; border:1px solid #d6d2e8; border-radius:4px; padding:0 7px; font-weight:600; font-size:14px; }
+  code { font-family: Consolas, monospace; font-size:14px; background:#efedf7; padding:1px 6px; border-radius:4px; }
+  .tip, .warn, .ok { padding:11px 15px; border-radius:6px; margin:12px 0; font-size:15px; }
+  .tip { background:#fff8ea; border-left:4px solid var(--amber); }
+  .warn { background:#fdecef; border-left:4px solid var(--red); }
+  .ok { background:#e9f7f0; border-left:4px solid var(--green); }
+  .flow { display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin:12px 0; }
+  .flow span { background:var(--card); border:1px solid var(--line); border-radius:4px; padding:4px 11px; font-size:14px; }
+  .flow i { color:var(--muted); font-style:normal; }
+  table { width:100%; border-collapse:collapse; background:var(--card); border:1px solid var(--line); font-size:15px; }
+  th, td { text-align:left; padding:11px 14px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { background:#f1eff8; font-weight:600; }
+  label.chk { display:block; cursor:pointer; }
+  input[type=checkbox] { transform: scale(1.2); margin-right: 8px; accent-color: #d9678f; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header><img class="logo" src="src/logo.png" alt=""><div><div class="kicker">TUTO</div><h1>Flowey's Software Manager v2.6</h1></div></header>
+  <p class="lead">Suis les étapes dans l'ordre et coche au fur et à mesure (les cases restent cochées tant que la page est ouverte).<br>
+  Aucune commande à taper : tout se fait en double-cliquant sur des fichiers ou en copiant-collant.</p>
+
+  <nav><b>Sommaire :</b><br>
+    <a href="#v26">0. Passer à la v2.6 (renommer / supprimer un booster)</a>
+    <a href="#maj">0 bis. Passer à la v2.5</a>
+    <a href="#install">1. Première installation</a>
+    <a href="#boosters">2. Tes boosters</a>
+    <a href="#quotidien">3. Au quotidien</a>
+    <a href="#updates">4. Publier une mise à jour</a>
+    <a href="#problemes">5. Problèmes fréquents</a></nav>
+
+  <!-- ===================== 0 ===================== -->
+  <h2 id="v26">0. Passer à la v2.6 <small>(5 min)</small></h2>
+  <div class="step big" data-n="★"><h3>Nouveau : renommer ou supprimer un booster</h3>
+    <ol>
+      <li><label class="chk"><input type="checkbox">Extrais <code>Boost-Manager-v2.6.zip</code> et <b>copie ton <code>logo.png</code></b> dans son dossier <code>src</code> (le zip n'en contient pas, pour ne plus écraser le tien).</label></li>
+      <li><label class="chk"><input type="checkbox"><b>Supabase → SQL Editor → + New query</b> : colle tout <code>supabase/schema.sql</code> → <b class="btn">Run</b>.</label></li>
+      <li><label class="chk"><input type="checkbox">Double-clic sur <b>1-INSTALLER.bat</b>, puis <b>4-PUBLIER-MISE-A-JOUR.bat</b> → <b>Oui</b> → tape <code>2.6.0</code> → glisse les 3 fichiers de <code>dist</code> sur GitHub → <b class="btn">Publish release</b>.
+        <br>(Si tes boosters n'ont pas encore l'app avec mises à jour auto : <b>3-CREER-EXE.bat</b> et envoie-leur le Setup.)</label></li>
+      <li><label class="chk"><input type="checkbox"><b>Corrige Noxio → Naxio</b> : <b class="btn">Équipe</b> → ligne de Noxio → <b class="btn">Renommer</b> → tape <code>Naxio</code> → <b>Renommer</b>.</label></li>
+    </ol>
+    <div class="tip"><b>Renommer</b> = corriger un pseudo : tout est gardé (commandes, gains, paiements, licence, chat).<br>
+    <b>Supprimer</b> = retirer quelqu'un ajouté par erreur. Ça ne marche que s'il n'a encore <b>aucune commande, aucun paiement et aucun gain</b>, pour ne jamais fausser tes comptes. Pour quelqu'un qui quitte l'équipe, clique plutôt sur <b>Actif</b> pour le passer en <b>Inactif</b> : il disparaît des listes mais son historique reste juste.</div></div>
+
+  <h2 id="maj">0 bis. Passer à la v2.5 <small>(10 min)</small></h2>
+  <div class="step big" data-n="★"><h3>Ce qui change</h3>
+    <ul>
+      <li><b>Les couleurs de l'app viennent de ton logo.</b> Fini le thème « nuit » violet : l'app lit ton <code>logo.png</code> et prend ses couleurs (fond, boutons, halos animés).</li>
+      <li><b>Nouvelle police</b> : Segoe UI, la police moderne de Windows, bien plus lisible. Plus de police à empattements.</li>
+      <li><b>Photo de profil</b> pour toi et chaque booster, visible dans le menu, l'équipe, le wallet et le chat.</li>
+      <li><b>Ton logo sur l'icône</b> de l'app (barre des tâches, bureau, menu Démarrer).</li>
+    </ul></div>
+  <div class="step big" data-n="1"><h3>Les étapes, dans l'ordre</h3>
+    <ol>
+      <li><label class="chk"><input type="checkbox"><b>Extrais</b> <code>Boost-Manager-v2.5.zip</code> directement dans <code>C:\</code> : tu obtiens le dossier <code>C:\Boost-Manager-v2.5</code>, c'est là que tu travailles désormais. Si l'Explorateur rame, utilise PowerShell comme la dernière fois :<br>
+        <code>Expand-Archive "$HOME\Downloads\Boost-Manager-v2.5.zip" C:\</code><br>Ton <code>src/config.js</code> est déjà rempli.</label></li>
+      <li><label class="chk"><input type="checkbox"><b>Remets ton logo</b> : copie ton <code>logo.png</code> dans le dossier <code>src</code> du nouveau dossier et remplace celui qui s'y trouve.
+        N'importe quelle taille convient (même 1920×1080) : pour l'icône, l'app garde automatiquement le <b>centre</b> de l'image, en carré. Si le sujet de ton image n'est pas au centre, recadre-la toi-même en carré dans Paint.</label></li>
+      <li><label class="chk"><input type="checkbox"><b>Supabase → SQL Editor → + New query</b>. Colle tout le contenu de <code>supabase/schema.sql</code> et clique sur <b class="btn">Run</b>.
+        Ça ajoute le rangement des photos de profil. Tes commandes et tes paiements ne bougent pas.</label></li>
+      <li><label class="chk"><input type="checkbox">Double-clic sur <b>1-INSTALLER.bat</b>, puis sur <b>2-TESTER.bat</b>. L'app prend les couleurs de ton logo.
+        <br><span class="muted">En mode test, la barre des tâches montre encore l'icône ronde d'Electron. C'est normal : ton logo apparaît sur la vraie app installée (étape 6).</span></label></li>
+      <li><label class="chk"><input type="checkbox"><b>Mets ta photo</b> : clique sur le <b>rond</b> en bas à gauche (à côté de « Flowey ») → <b class="btn">Choisir une image</b>. Elle est recadrée en carré toute seule. Tu peux aussi passer par <b class="btn">Paramètres</b>. Ferme ensuite la fenêtre de test.</label></li>
+      <li><label class="chk"><input type="checkbox"><b>Publie la version pour toute l'équipe</b> :
+        <ul>
+          <li>Tes boosters ont déjà installé un Setup avec les mises à jour automatiques ? Double-clic sur <b>4-PUBLIER-MISE-A-JOUR.bat</b>, tape <code>2.5.0</code>, puis glisse les 3 fichiers sur GitHub (voir la <a href="#updates">partie 4, étape C</a>).</li>
+          <li>Sinon : double-clic sur <b>3-CREER-EXE.bat</b> et envoie-leur <code>dist/Flowey-Software-Manager-Setup-2.5.0.exe</code>.</li>
+        </ul>
+        <b>Nouveau :</b> Windows ouvre une fenêtre « Voulez-vous autoriser cette application… ? ». Clique sur <b>Oui</b> : c'est ce qui permet de mettre ton logo sur l'icône de l'exe. Le .bat te redemande aussi ton <b>pseudo GitHub</b> une fois.</label></li>
+      <li><label class="chk"><input type="checkbox"><b>Installe le Setup 2.5.0 sur ton PC.</b> Si la barre des tâches garde l'ancienne icône, clic droit sur l'icône → <i>Détacher de la barre des tâches</i>, relance l'app depuis le bureau, puis épingle-la à nouveau.</label></li>
+      <li><label class="chk"><input type="checkbox">Dis à chaque booster de cliquer sur <b>son rond en bas à gauche</b> pour mettre sa photo.</label></li>
+    </ol></div>
+
+  <div class="step" data-n="✕"><h3>Supprimer la fausse commande de test de Flare</h3>
+    <p><b>Le plus simple, dans l'app (v2.4) :</b> <b class="btn">Commandes</b> → clique sur l'ID de la fausse commande → bouton rouge <b class="btn">Supprimer</b> → confirme.
+    La part de Flare revient aussitôt à la normale.</p>
+    <p><b>Sinon, avec Supabase :</b> SQL Editor → New query → colle <code>supabase/reset_commandes_test.sql</code> → Run. Tu vois la liste de toutes les commandes et tu repères l'ID de la fausse.
+    Dans le fichier, enlève les <code>--</code> devant la dernière ligne, remplace <code>TEST1</code> par cet ID, puis Run à nouveau.</p>
+    <div class="tip">Si Flare affiche encore un montant en trop, va dans <b class="btn">Paiements</b> → « Gains hors commandes » et supprime la ligne de test avec la croix.</div></div>
+
+  <!-- ===================== 1 ===================== -->
+  <h2 id="install">1. Première installation <small>(seulement sur un nouveau projet)</small></h2>
+  <div class="step" data-n="1"><h3><label class="chk"><input type="checkbox">Projet Supabase</label></h3>
+    <p><b>supabase.com</b> → <b class="btn">New project</b> → nom <code>boost-manager</code>. Génère un mot de passe et garde-le de côté. Choisis la région Europe, puis crée le projet.</p></div>
+  <div class="step" data-n="2"><h3><label class="chk"><input type="checkbox">Tables + historique</label></h3>
+    <p>SQL Editor → New query : colle <code>schema.sql</code> → Run. Ensuite, une autre New query avec <code>import_historique_discord.sql</code> → Run.</p></div>
+  <div class="step" data-n="3"><h3><label class="chk"><input type="checkbox">Désactiver la confirmation par email</label></h3>
+    <p>Authentication → Sign In / Providers → Email → désactive <b>Confirm email</b> → Save.</p></div>
+  <div class="step" data-n="4"><h3><label class="chk"><input type="checkbox">Relier l'app (déjà fait pour toi)</label></h3>
+    <p><code>src/config.js</code> contient déjà ton URL et ta clé publique. Ne mets jamais la clé <code>sb_secret_…</code> dedans.</p></div>
+  <div class="step" data-n="5"><h3><label class="chk"><input type="checkbox">Node.js (une fois par PC)</label></h3>
+    <p><b>nodejs.org</b> → version <b>LTS</b> → installe en cliquant sur Suivant partout. Laisse décochée la case « Tools for Native Modules ». <b>Redémarre le PC.</b></p></div>
+  <div class="step" data-n="6"><h3><label class="chk"><input type="checkbox">Installer, tester, devenir admin</label></h3>
+    <p>Lance <b>1-INSTALLER.bat</b>, puis <b>2-TESTER.bat</b>. Dans l'app, clique sur <b class="btn">Créer un compte</b>, puis sur <b class="btn">Je suis Flowey : devenir admin</b>.
+    Fais-le <b>avant</b> d'envoyer l'app à quelqu'un : le bouton ne marche qu'une fois.</p></div>
+
+  <!-- ===================== 2 ===================== -->
+  <h2 id="boosters">2. Tes boosters</h2>
+  <div class="step" data-n="+"><h3>Ajouter un booster et lui donner l'accès</h3>
+    <ol>
+      <li><b class="btn">Équipe</b> → formulaire « Ajouter un booster » en bas. Jewex, Dorsal, Flare, Noxio et Vulcaano existent déjà.</li>
+      <li>Sur sa ligne, clique sur <b class="btn">Clé</b>, choisis la durée, puis <b class="btn">Générer</b> et <b class="btn">Copier</b>.</li>
+      <li>Envoie-lui le <b>Setup</b> du dossier <code>dist</code> et sa <b>clé</b>, par exemple sur Discord.</li>
+      <li>De son côté : il installe l'app, clique sur <b>Créer un compte</b>, colle sa clé, puis va dans <b>Mes gains</b> pour indiquer <b>où recevoir ses paiements</b> (PayPal, Skrill, Revolut…).</li>
+    </ol>
+    <div class="tip">Il ne voit que ses commandes, sa part et ses paiements : jamais les clients, ta part, ni l'onglet Eldorado.
+    Les boutons <b>+30 j</b> et <b>Révoquer</b> se trouvent dans <b class="btn">Licences</b>.</div></div>
+
+  <!-- ===================== 3 ===================== -->
+  <h2 id="quotidien">3. Au quotidien</h2>
+  <div class="flow"><span>Nouvelle commande</span><i>→</i><span>Attribuer</span><i>→</i><span>Le booster est notifié</span><i>→</i><span>« Je commence »</span><i>→</i>
+    <span>Chat</span><i>→</i><span>« J'ai terminé »</span><i>→</i><span>Tu valides</span><i>→</i><span>Payer</span></div>
+  <table>
+    <tr><th style="width:36%">Je veux…</th><th>Je fais…</th></tr>
+    <tr><td>Créer une commande vite</td><td><b>Ctrl + N</b> n'importe où, ou <b class="btn">Nouvelle commande</b>. Colle le <b>lien de la commande Eldorado</b> avec le bouton à côté du champ : l'ID est rempli automatiquement.</td></tr>
+    <tr><td>Refaire une commande similaire</td><td>Ouvre-la → <b class="btn">Dupliquer</b> : jeu, rangs, consignes et prix sont repris. Il ne reste qu'à mettre le nouvel ID.</td></tr>
+    <tr><td>Retrouver la commande sur Eldorado</td><td>Ouvre-la → <b class="btn">Voir sur Eldorado</b> : elle s'ouvre dans ton navigateur.</td></tr>
+    <tr><td>La donner à un booster</td><td><b class="btn">Attribuer</b> : choisis le type et le booster. Sa disponibilité est affichée à côté de son nom.</td></tr>
+    <tr><td>Savoir ce qui presse</td><td>Tableau de bord : <b>À attribuer</b>, <b>À valider</b>, <b>À livrer sous 24 h</b>, <b>En retard</b>. Clique sur une case pour voir la liste.</td></tr>
+    <tr><td>Payer un booster</td><td>Bouton <b class="btn">Payer</b> : l'app affiche ce que tu lui dois et son adresse, avec un bouton Copier. Envoie l'argent, puis clique sur <b>J'ai envoyé le paiement</b>.</td></tr>
+    <tr><td>Savoir ce qui est à moi sur Eldorado</td><td><b class="btn">Eldorado</b> → <b>Ouvrir Eldorado</b> (dans ton navigateur) → regarde ton solde → tape-le dans « Relever mon solde » → <b>Répartir</b>. Le tableau de bord te le rappelle tous les 3 jours.</td></tr>
+    <tr><td>Fixer un prix sur Eldorado</td><td><b class="btn">Calculateur</b> : « je veux que le booster touche 10 $ » → l'app donne le prix minimum à afficher, au centime près.</td></tr>
+    <tr><td>Garder une copie / faire ma compta</td><td><b class="btn">Commandes</b> → <b>Export</b>, ou <b class="btn">Paiements</b> → <b>Exporter (CSV)</b>. Le fichier s'ouvre dans Excel.</td></tr>
+    <tr><td>Voir qui livre vite</td><td><b class="btn">Équipe</b> → colonne <b>Délai moyen</b> (entre « Je commence » et « J'ai terminé »).</td></tr>
+    <tr><td>Parler à l'équipe</td><td><b class="btn">Annonces</b> : à toute l'équipe ou à un seul booster, avec l'option épingler.</td></tr>
+    <tr><td>Corriger le pseudo d'un booster</td><td><b class="btn">Équipe</b> → <b class="btn">Renommer</b> sur sa ligne. Rien n'est perdu.</td></tr>
+    <tr><td>Retirer un booster</td><td>Ajouté par erreur : <b class="btn">Équipe</b> → <b class="btn">Supprimer</b>. Il quitte l'équipe : clique sur <b>Actif</b> pour le passer en <b>Inactif</b> (son historique reste).</td></tr>
+    <tr><td>Changer ma photo de profil</td><td>Clique sur ton <b>rond</b> en bas à gauche, ou <b class="btn">Paramètres</b> → Photo de profil. Les boosters, eux, passent par leur rond ou par <b class="btn">Ma licence</b>.</td></tr>
+    <tr><td>Changer les couleurs de l'app</td><td>Remplace <code>src/logo.png</code> par un autre logo, puis publie une mise à jour : l'app et l'icône prennent le nouveau logo et ses couleurs.</td></tr>
+  </table>
+
+  <!-- ===================== 4 ===================== -->
+  <h2 id="updates">4. Publier une mise à jour</h2>
+  <div class="step" data-n="A"><h3><label class="chk"><input type="checkbox">Compte GitHub (une fois)</label></h3>
+    <p><b>github.com</b> → <b class="btn">Sign up</b>. Retiens ton <b>pseudo</b>.</p></div>
+  <div class="step" data-n="B"><h3><label class="chk"><input type="checkbox">Dépôt des mises à jour (une fois)</label></h3>
+    <p><b class="btn">+</b> en haut à droite → <b class="btn">New repository</b> → nom exact <code>boost-manager-updates</code> → <b>Public</b> → <b class="btn">Create repository</b>.
+    Il ne contiendra que les fichiers d'installation, jamais tes données.</p></div>
+  <div class="step" data-n="C"><h3>À chaque nouvelle version</h3>
+    <ol>
+      <li>Extrais le nouveau zip que je t'envoie et remets ton <code>src/logo.png</code> dedans (n'importe quelle taille, le centre sert d'icône). <code>src/config.js</code> est déjà rempli. Le .bat te redemande ton pseudo GitHub si besoin.</li>
+      <li>Si un nouveau <code>schema.sql</code> est fourni, relance-le dans Supabase (SQL Editor → Run).</li>
+      <li>Double-clic sur <b>4-PUBLIER-MISE-A-JOUR.bat</b>, clique sur <b>Oui</b> quand Windows demande l'autorisation, puis tape le numéro de la version, par exemple <code>2.5.0</code> (toujours plus grand que le précédent).</li>
+      <li>La page GitHub s'ouvre. Glisse les <b>3 fichiers</b> du dossier <code>dist</code> : le <code>.exe</code>, le <code>.exe.blockmap</code> et <code>latest.yml</code>.</li>
+      <li>Clique sur <b class="btn">Publish release</b>.</li>
+    </ol>
+    <div class="ok">Chez toute l'équipe, l'app affiche « Nouvelle version disponible — Mettre à jour maintenant », au démarrage ou dans l'heure.</div></div>
+
+  <!-- ===================== 5 ===================== -->
+  <h2 id="problemes">5. Problèmes fréquents</h2>
+  <table>
+    <tr><th style="width:40%">Ce que je vois</th><th>Solution</th></tr>
+    <tr><td>« Configuration requise »</td><td><code>src/config.js</code> n'est pas rempli, ou tu es dans un ancien dossier.</td></tr>
+    <tr><td>« Invalid path specified in request URL »</td><td>L'URL dans <code>config.js</code> doit s'arrêter à <code>.supabase.co</code>, sans <code>/rest/v1/</code>.</td></tr>
+    <tr><td>Erreur de « lien symbolique » (symbolic link) pendant 3-CREER-EXE ou 4-PUBLIER</td><td>Tu as cliqué sur <b>Non</b> dans la fenêtre Windows. Relance le .bat et clique sur <b>Oui</b>.
+      Pour ne plus jamais avoir cette fenêtre : Paramètres Windows → <i>Système</i> → <i>Pour les développeurs</i> → active le <b>Mode développeur</b>.</td></tr>
+    <tr><td>« PROBLEME DE LOGO » pendant la création de l'exe</td><td>Ton <code>logo.png</code> fait moins de 256 pixels de côté, ou ce n'est pas une vraie image. Ouvre-le dans Paint → <i>Fichier</i> → <i>Enregistrer sous</i> → <i>Image PNG</i>, avec une image plus grande.</td></tr>
+    <tr><td>L'app a encore l'icône d'Electron</td><td>Normal en mode test (2-TESTER). Sur l'app installée : désépingle puis réépingle l'icône de la barre des tâches.</td></tr>
+    <tr><td>Photo de profil : « Bucket not found » ou « row-level security »</td><td>Relance <code>supabase/schema.sql</code> dans Supabase (SQL Editor → Run). Vérifie ensuite dans <b>Storage</b> qu'il y a un dossier <code>avatars</code> marqué <b>Public</b>.</td></tr>
+    <tr><td>Les couleurs ne changent pas</td><td>Ton logo est en noir et blanc : l'app garde alors son thème bleu et gris. Avec un logo en couleurs, elle prend ses couleurs.</td></tr>
+    <tr><td>Eldorado bloque sur « Vérification que vous êtes humain »</td><td>Depuis la v2.3.1, Eldorado s'ouvre dans ton navigateur habituel, où la vérification passe normalement.</td></tr>
+    <tr><td>« Pas de connexion à la base »</td><td>Vérifie Internet. Le projet Supabase gratuit se met en pause après environ une semaine sans utilisation : clique sur <b>Restore</b> dans Supabase.</td></tr>
+    <tr><td>La mise à jour n'arrive pas</td><td>Sur GitHub, la release doit être <b>publiée</b> (pas en Draft), contenir les 3 fichiers, et avoir un numéro plus grand que l'ancien.</td></tr>
+    <tr><td>Le chat ne se met pas à jour tout seul</td><td>Supabase → Database → Publications → <code>supabase_realtime</code> : coche <code>messages</code> et <code>notifications</code>.</td></tr>
+    <tr><td>Autre chose</td><td>Fais une capture d'écran et envoie-la à Claude.</td></tr>
+  </table>
+</div>
+</body>
+</html>

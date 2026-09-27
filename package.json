@@ -1,0 +1,60 @@
+{
+  "name": "boost-manager",
+  "productName": "Flowey's Software Manager",
+  "version": "2.6.0",
+  "description": "Gestion des commandes de boosting Eldorado, des boosters et des licences",
+  "author": "Flowey",
+  "main": "main.js",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win --publish never"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.0",
+    "electron-updater": "^6.3.9"
+  },
+  "devDependencies": {
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.flowey.boostmanager",
+    "productName": "Flowey's Software Manager",
+    "files": [
+      "main.js",
+      "preload.js",
+      "theme.js",
+      "src/**/*",
+      "package.json"
+    ],
+    "win": {
+      "executableName": "FloweySoftwareManager",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "signAndEditExecutable": true,
+      "icon": "build/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "Flowey's Software Manager",
+      "artifactName": "Flowey-Software-Manager-Setup-${version}.${ext}"
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "TON-PSEUDO-GITHUB",
+        "repo": "boost-manager-updates",
+        "releaseType": "release"
+      }
+    ]
+  }
+}

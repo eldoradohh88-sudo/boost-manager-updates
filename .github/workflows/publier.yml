@@ -1,0 +1,47 @@
+# Publie automatiquement une mise a jour a chaque changement du code.
+# Construit l'app sur un PC Windows de GitHub et publie le Setup dans les Releases
+# de ce depot : les apps installees se mettent a jour toutes seules.
+name: Publier la mise a jour
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: publier
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Installer
+        run: npm install --no-audit --no-fund
+
+      - name: Pseudo GitHub dans package.json
+        shell: pwsh
+        run: |
+          $p = Get-Content package.json -Raw
+          $p.Replace('TON-PSEUDO-GITHUB', '${{ github.repository_owner }}') | Set-Content package.json -NoNewline -Encoding utf8
+
+      - name: Verifier le logo
+        run: node check-logo.js
+
+      - name: Creer l'icone
+        shell: powershell
+        run: ./make-icon.ps1
+
+      - name: Construire et publier
+        run: npx electron-builder --win --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
