@@ -1046,8 +1046,9 @@ async function checkLastCrash() {
   try {
     const lines = await window.desktop.crashLog();
     if (!lines || !lines.length) return;
-    lines.forEach((l) => reportError('plantage', l));
-    toast('L\'app a rencontré un problème la dernière fois : il a été signalé à Flowey.', 'error');
+    lastErrAt = 0;
+    reportError(lines.some((l) => /BRUTALEMENT/.test(l)) ? 'fermeture brutale' : 'plantage', lines.join(' || '));
+    toast('L\'app s\'est mal fermée la dernière fois : c\'est signalé à Flowey.', 'error');
   } catch (_) { /* rien */ }
 }
 

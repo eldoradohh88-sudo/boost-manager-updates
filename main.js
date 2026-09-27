@@ -22,6 +22,7 @@ if (!gotLock) app.quit();
 // journal des plantages : gardé sur le PC et montré au prochain démarrage
 const crashLogPath = () => path.join(app.getPath('userData'), 'crash.log');
 function logCrash(kind, detail) {
+  if (gotLock) { try { fs0.appendFileSync(path.join(app.getPath('userData'), 'session.log'), `${new Date().toISOString()} | ${kind}\n`); } catch (_) { /* rien */ } }
   try {
     const line = `${new Date().toISOString()} | v${app.getVersion()} | ${kind} | ${String(detail && (detail.stack || detail.message || JSON.stringify(detail)) || detail).slice(0, 1500)}\n`;
     fs0.appendFileSync(crashLogPath(), line);
@@ -102,15 +103,39 @@ function createWindow() {
     setTimeout(() => { try { win.reload(); } catch (_) { /* rien */ } }, 800);
   });
   win.on('unresponsive', () => logCrash('fenetre', 'ne répond plus'));
+  win.on('close', () => logSession('fenetre fermee'));
+  win.webContents.on('did-finish-load', () => logSession('page chargee'));
 }
 ipcMain.handle('boot-flags', () => ({ safe: !!bootPrefs.safe, gpuAuto: !!bootPrefs.gpuAuto, gpu: bootPrefs.gpu !== false }));
 ipcMain.handle('safe-off', () => { bootPrefs.safe = false; saveBootPrefs(); return true; });
+// Journal de session : démarrage, fermeture, plantages. Si la session précédente ne s'est pas terminée
+// proprement (pas de « fin normale »), c'est que quelque chose a tué l'app : on le signale au démarrage suivant.
+const sessionLogPath = () => path.join(app.getPath('userData'), 'session.log');
+let previousSession = [];
+function logSession(what) {
+  if (!gotLock) return; // une 2e ouverture ne touche pas au journal de la fenêtre déjà ouverte
+  try { fs0.appendFileSync(sessionLogPath(), `${new Date().toISOString()} | v${app.getVersion()} | ${what}\n`); } catch (_) { /* rien */ }
+}
+if (gotLock) {
+  try { previousSession = fs0.readFileSync(sessionLogPath(), 'utf8').trim().split('\n').filter(Boolean); } catch (_) { previousSession = []; }
+  try { fs0.writeFileSync(sessionLogPath(), ''); } catch (_) { /* rien */ }
+  logSession('demarrage');
+}
+app.on('before-quit', () => logSession('fermeture demandee'));
+app.on('will-quit', () => logSession('fin normale'));
 ipcMain.handle('crash-log', () => {
+  const out = [];
   try {
     const txt = fs0.readFileSync(crashLogPath(), 'utf8');
     fs0.unlinkSync(crashLogPath());
-    return txt.trim().split('\n').slice(-5);
-  } catch (_) { return []; }
+    out.push(...txt.trim().split('\n').slice(-5));
+  } catch (_) { /* pas de plantage noté */ }
+  const prev = previousSession;
+  if (prev.length && !prev.some((l) => /fin normale/.test(l))) {
+    out.push('SESSION PRECEDENTE ARRETEE BRUTALEMENT (tuee par Windows, un antivirus ou l\'installateur ?) : ' + prev.slice(-8).join(' / '));
+  }
+  previousSession = [];
+  return out;
 });
 
 /* ---------------- mises à jour automatiques ---------------- */
@@ -129,16 +154,16 @@ function setupUpdater() {
   autoUpdater.autoInstallOnAppQuit = true;
   const send = (status) => { if (win && !win.isDestroyed()) win.webContents.send('updater', status); };
   let version = null;
-  autoUpdater.on('update-available', (info) => { version = info.version; send({ state: 'downloading', version, percent: 0 }); });
+  autoUpdater.on('update-available', (info) => { version = info.version; logSession('maj trouvee ' + info.version); send({ state: 'downloading', version, percent: 0 }); });
   autoUpdater.on('download-progress', (p) => send({ state: 'downloading', version, percent: Math.round(p.percent || 0) }));
   // la mise à jour ne ferme JAMAIS l'app d'elle-même : message « Mettre à jour » dans l'app,
   // sinon installation discrète à la prochaine fermeture
-  autoUpdater.on('update-downloaded', (info) => send({ state: 'ready', version: info.version }));
+  autoUpdater.on('update-downloaded', (info) => { logSession('maj telechargee ' + info.version); send({ state: 'ready', version: info.version }); });
   autoUpdater.on('error', (err) => console.error('Mise à jour :', err && err.message));
   const check = () => autoUpdater.checkForUpdates().catch(() => { /* hors ligne ou pas encore configuré */ });
   check();
   setInterval(check, 60 * 60 * 1000); // revérifie toutes les heures
-  ipcMain.handle('updater-install', () => autoUpdater.quitAndInstall(true, true));
+  ipcMain.handle('updater-install', () => { logSession('maj installation demandee'); autoUpdater.quitAndInstall(true, true); });
 }
 ipcMain.handle('app-version', () => app.getVersion());
 // téléchargement d'une pièce jointe (Windows demande où l'enregistrer)
