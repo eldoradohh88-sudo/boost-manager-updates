@@ -431,7 +431,7 @@ function applyBannerPalette(pal, force) {
   if (!pal) return; // image en noir et blanc à cet instant : on garde les couleurs actuelles
   const key = JSON.stringify(pal);
   if (key === lastBannerPalette) return;
-  if (!force && Date.now() - lastBannerApply < 1800) return; // pas plus d'un changement de couleurs toutes les ~2 s
+  if (!force && Date.now() - lastBannerApply < 900) return; // pas plus d'un changement de couleurs par seconde
   lastBannerPalette = key; lastBannerApply = Date.now();
   applyTheme(pal);
 }
@@ -442,28 +442,31 @@ function paletteOf(source, ctx) {
 }
 // lit chaque image du GIF et calcule ses couleurs, avec le moment où elle apparaît
 async function bannerTimeline(url, ctx) {
-  if (typeof ImageDecoder === 'undefined') return null;
+  if (typeof ImageDecoder === 'undefined') { S.bannerInfo = 'décodeur indisponible'; return null; }
   const m = url.match(/^data:([^;]+);base64,/);
   if (!m) return null;
   const bin = atob(url.slice(m[0].length));
   const bytes = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-  if (bytes.length > 12 * 1024 * 1024) return null; // GIF très lourd : on garde une couleur fixe
   const dec = new ImageDecoder({ data: bytes, type: m[1] });
   try {
     await dec.tracks.ready;
-    if (dec.tracks.selectedTrack && dec.tracks.selectedTrack.frameCount > 300) return null;
-    const count = Math.min(dec.tracks.selectedTrack ? dec.tracks.selectedTrack.frameCount : 1, 240);
-    const every = Math.max(1, Math.ceil(count / 24)); // au plus ~24 relevés de couleur (léger pour le processeur)
-    const steps = []; let t = 0;
-    for (let i = 0; i < count; i++) {
+    const count = dec.tracks.selectedTrack ? dec.tracks.selectedTrack.frameCount : 1;
+    // on ne lit que ~24 images réparties sur tout le GIF (même énorme) : léger et fiable
+    const samples = Math.min(count, 24);
+    const steps = []; let durSum = 0;
+    for (let k = 0; k < samples; k++) {
+      const i = Math.floor((k * count) / samples);
       const { image } = await dec.decode({ frameIndex: i });
-      const d = image.duration ? image.duration / 1000 : 100; // en ms
-      if (i % every === 0) steps.push({ at: t, pal: paletteOf(image, ctx) });
+      durSum += image.duration ? image.duration / 1000 : 100;
+      steps.push({ i, pal: paletteOf(image, ctx) });
       image.close();
-      t += Math.max(d, 20);
     }
-    return { steps, total: t };
+    const frameMs = Math.max(20, durSum / Math.max(1, samples)); // durée moyenne d'une image
+    steps.forEach((st) => { st.at = st.i * frameMs; });
+    const distinct = new Set(steps.map((st) => st.pal && st.pal['--accent'])).size;
+    S.bannerInfo = `${count} images · ${distinct} couleur${distinct > 1 ? 's' : ''} détectée${distinct > 1 ? 's' : ''}`;
+    return { steps, total: count * frameMs };
   } finally { dec.close(); }
 }
 async function initBanner() {
@@ -508,7 +511,7 @@ function bannerCard() {
   const op = bannerOpacity();
   return `<div class="card"><div class="card-head"><h2>${ic('sparkles')} Bannière de fond</h2></div>
     <div class="avatar-edit">${S.bannerUrl ? `<img class="banner-preview" src="${S.bannerUrl}" alt="">` : '<div class="banner-preview"></div>'}
-      <div><p class="muted small">Une image ou un <b>GIF animé</b> en fond de l'app. Les couleurs de l'app suivent la bannière et changent en même temps qu'elle. Seulement chez toi.</p>
+      <div>${S.bannerUrl ? `<p class="small"><b>Suivi des couleurs :</b> ${S.safeMode ? 'coupé (mode léger)' : !prefs().bannerColors ? 'désactivé dans Apparence' : esc(S.bannerInfo || 'image fixe')}</p>` : ''}<p class="muted small">Une image ou un <b>GIF animé</b> en fond de l'app. Les couleurs de l'app suivent la bannière et changent en même temps qu'elle. Seulement chez toi.</p>
       <label class="btn primary">${ic('download')} Choisir une bannière<input type="file" accept="image/gif,image/png,image/jpeg,image/webp" data-change="banner-file" hidden></label>
       ${S.bannerUrl ? '<button class="ghost" data-action="banner-reset">Retirer la bannière</button>' : ''}
       ${S.bannerUrl ? `<div class="form-grid" style="margin-top:10px">${field('Visibilité', `<select data-change="banner-op">${opt('.25', 'Discrète', op === '.25')}${opt('.4', 'Normale', op === '.4')}${opt('.6', 'Forte', op === '.6')}${opt('.85', 'Maximum', op === '.85')}</select>`)}</div>` : ''}</div></div></div>`;
