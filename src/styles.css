@@ -504,3 +504,25 @@ body.extra-round button, body.extra-round .btn, body.extra-round input, body.ext
 .otp-boxes { display: flex; gap: 10px; justify-content: center; margin: 18px 0 6px; }
 .otp-boxes input.otp { width: 52px; height: 62px; text-align: center; font: 700 26px var(--font-title); padding: 0; letter-spacing: 0; }
 .otp-boxes input.otp:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+
+/* ---------- messagerie d'équipe ---------- */
+.tchat { display: grid; grid-template-columns: 270px 1fr; padding: 0; height: calc(100vh - 170px); min-height: 460px; overflow: hidden; }
+.tchat-list { border-right: 1px solid var(--line); overflow: auto; padding: 8px; }
+.tchat-list .nav-group { padding: 12px 10px 6px; }
+.tchat-item { display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 10px; border: 0; background: none; border-radius: 10px;
+  text-align: left; color: var(--text-2); font: inherit; cursor: pointer; transition: background .15s; }
+.tchat-item:hover { background: var(--accent-soft); transform: none; box-shadow: none; }
+.tchat-item.active { background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent-line); color: var(--text); }
+.tchat-who { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.tchat-who b { color: var(--text); font-weight: 650; }
+.tchat-who .small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.avatar.general { background: linear-gradient(135deg, var(--accent), var(--accent-b)); font-size: 18px; }
+.tchat-main { display: flex; flex-direction: column; min-width: 0; }
+.tchat-head { display: flex; align-items: center; gap: 12px; padding: 14px 18px; border-bottom: 1px solid var(--line); }
+.tchat-log { flex: 1; overflow: auto; display: flex; flex-direction: column; gap: 10px; padding: 16px 18px; }
+.tchat-day { text-align: center; margin: 6px 0; }
+.tchat-day span { font-size: 11.5px; color: var(--muted); background: var(--panel-2); padding: 3px 10px; border-radius: 99px; text-transform: capitalize; }
+.tchat-form { display: flex; gap: 8px; padding: 12px 14px; border-top: 1px solid var(--line); align-items: flex-end; }
+.tchat-form textarea { flex: 1; resize: none; min-height: 44px; max-height: 160px; }
+.nav-badge { margin-left: auto; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 99px; background: var(--bad); color: #fff;
+  font-size: 11px; font-weight: 700; display: inline-grid; place-items: center; }

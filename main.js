@@ -129,10 +129,53 @@ function logoInfo() {
   const sq = squareLogo();
   return { url: sq ? sq.toDataURL() : null, custom: hasCustomLogo() };
 }
+// Icône des raccourcis Windows (barre des tâches épinglée, bureau, menu Démarrer) = logo choisi
+function icoFromImage(img) {
+  // fichier .ico contenant une image PNG 256 x 256 (format accepté par Windows depuis Vista)
+  const png = img.resize({ width: 256, height: 256, quality: 'best' }).toPNG();
+  const head = Buffer.alloc(22);
+  head.writeUInt16LE(0, 0); head.writeUInt16LE(1, 2); head.writeUInt16LE(1, 4); // ICO, 1 image
+  head.writeUInt8(0, 6); head.writeUInt8(0, 7); // 0 = 256 px
+  head.writeUInt8(0, 8); head.writeUInt8(0, 9);
+  head.writeUInt16LE(1, 10); head.writeUInt16LE(32, 12);
+  head.writeUInt32LE(png.length, 14); head.writeUInt32LE(22, 18);
+  return Buffer.concat([head, png]);
+}
+function shortcutPaths() {
+  const name = "Flowey's Software Manager.lnk";
+  const appData = app.getPath('appData');
+  return [
+    path.join(app.getPath('desktop'), name),
+    path.join(appData, 'Microsoft', 'Windows', 'Start Menu', 'Programs', name),
+    path.join(appData, 'Microsoft', 'Internet Explorer', 'Quick Launch', 'User Pinned', 'TaskBar', name),
+  ];
+}
+function applyShortcutIcons() {
+  if (process.platform !== 'win32' || !app.isPackaged) return 0;
+  let icon = process.execPath; // logo de base de l'app
+  if (hasCustomLogo()) {
+    const sq = squareLogo();
+    if (sq) {
+      icon = path.join(app.getPath('userData'), 'custom-logo.ico');
+      try { fs.writeFileSync(icon, icoFromImage(sq)); } catch (_) { icon = process.execPath; }
+    }
+  }
+  let done = 0;
+  for (const lnk of shortcutPaths()) {
+    try {
+      if (!fs.existsSync(lnk)) continue;
+      const cur = shell.readShortcutLink(lnk);
+      if (!cur.target || path.resolve(cur.target).toLowerCase() !== path.resolve(process.execPath).toLowerCase()) continue;
+      if (shell.writeShortcutLink(lnk, 'update', { icon, iconIndex: 0 })) done++;
+    } catch (_) { /* raccourci inaccessible : on passe */ }
+  }
+  return done;
+}
 function logoChanged() {
   themeCache = undefined;
   const sq = squareLogo();
   if (sq && win && !win.isDestroyed()) win.setIcon(sq);
+  applyShortcutIcons();
   return { ...logoInfo(), theme: computeTheme() };
 }
 ipcMain.handle('logo-get', () => logoInfo());
@@ -204,5 +247,9 @@ app.on('second-instance', () => {
 
 app.setAppUserModelId('com.flowey.boostmanager'); // nécessaire aux notifications Windows
 
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+  createWindow();
+  // après une mise à jour, Windows remet l'icône de base sur les raccourcis : on remet celle de l'utilisateur
+  if (hasCustomLogo()) setTimeout(() => { try { applyShortcutIcons(); } catch (_) { /* rien */ } }, 3000);
+});
 app.on('window-all-closed', () => app.quit());

@@ -77,6 +77,9 @@ function errMsg(e) {
   if (/Invalid login credentials/i.test(m)) return 'Email ou mot de passe incorrect.';
   if (/User already registered/i.test(m)) return 'Un compte existe déjà avec cet email : clique sur « Se connecter ».';
   if (/Password should be/i.test(m)) return 'Mot de passe trop court (6 caractères minimum).';
+  if (/Error sending (magic link|confirmation|recovery)? ?email|smtp|535|authentication failed/i.test(m)) return "Supabase n'arrive pas à envoyer l'email : vérifie les réglages SMTP (Brevo) dans Supabase. Détail : " + m;
+  if (/rate limit/i.test(m)) return "Trop d'emails envoyés : attends un peu, ou augmente la limite dans Supabase → Authentication → Rate Limits. Détail : " + m;
+  if (/Signups not allowed for otp|otp_disabled/i.test(m)) return "La connexion par code est désactivée dans Supabase (Sign In / Providers → Email). Détail : " + m;
   if (/Failed to fetch|NetworkError/i.test(m)) return 'Pas de connexion à la base. Vérifie Internet et src/config.js.';
   return m;
 }
@@ -319,6 +322,15 @@ async function viewMySettings(main) {
 }
 
 /* ---------------- A2F : code à 6 chiffres par email ---------------- */
+// selon la version de Supabase, le code s'appelle « email » ou « magiclink »
+async function verifyCode(token) {
+  let r = await sb.auth.verifyOtp({ email: S.access.email, token, type: 'email' });
+  if (r.error) {
+    const r2 = await sb.auth.verifyOtp({ email: S.access.email, token, type: 'magiclink' });
+    if (!r2.error) return r2;
+  }
+  return r;
+}
 let otpTimer = null;
 async function sendOtp() {
   const email = S.access && S.access.email;
@@ -545,7 +557,8 @@ async function openProfile(name) {
       ${p.discord ? `<div class="psection"><h3>Discord</h3><div class="secret-row"><code>${esc(p.discord)}</code>
         <button class="sm" data-action="copy" data-text="${esc(p.discord)}">Copier</button></div></div>` : ''}
       ${!p.bio && !p.games && !p.discord ? `<p class="muted small">${p.me ? 'Ton profil est encore vide.' : esc(p.name) + ' n\'a pas encore rempli son profil.'}</p>` : ''}
-      ${p.me ? `<div class="form-actions"><button class="primary" data-action="my-profile">${ic('users')} Modifier mon profil</button></div>` : ''}
+      ${p.me ? `<div class="form-actions"><button class="primary" data-action="my-profile">${ic('users')} Modifier mon profil</button></div>`
+    : `<div class="form-actions"><button class="primary" data-action="chat-with" data-key="${esc(p.key)}">${ic('send')} Envoyer un message</button></div>`}
     </div></div>`, 'small profile');
 }
 async function openMyProfile() {
@@ -598,6 +611,150 @@ async function uploadProfileBanner(file) {
   const { error } = await sb.storage.from('avatars').upload(path, blob, { contentType: type, upsert: false });
   if (error) throw error;
   return sb.storage.from('avatars').getPublicUrl(path).data.publicUrl;
+}
+
+/* =====================================================================
+   MESSAGERIE D'ÉQUIPE : groupe général + messages privés (temps réel)
+   ===================================================================== */
+const myKey = () => (isAdmin() ? 'owner' : (S.access && S.access.booster_id) || '');
+const dmChannel = (a, b) => 'dm:' + [a, b].sort().join(':');
+function chanOther(ch) {
+  if (!ch || ch === 'general') return null;
+  const [a, b] = ch.slice(3).split(':');
+  return a === myKey() ? b : a;
+}
+function memberByKey(k) { return (S.profiles || []).find((p) => p.key === k) || null; }
+function chanTitle(ch) {
+  if (ch === 'general') return 'Général';
+  const m = memberByKey(chanOther(ch));
+  return m ? m.name : 'Conversation';
+}
+const readKey = () => 'bm_chat_read_' + ((S.access && S.access.email) || '');
+function chatRead() { try { return JSON.parse(localStorage.getItem(readKey()) || '{}') || {}; } catch (_) { return {}; } }
+function markChatRead(ch, at) {
+  const r = chatRead(); r[ch] = at || new Date().toISOString();
+  try { localStorage.setItem(readKey(), JSON.stringify(r)); } catch (_) { /* rien */ }
+}
+function chatUnreadTotal() { return Object.values(S.chatUnread || {}).reduce((a, b) => a + b, 0); }
+function updateChatBadge() {
+  const btn = document.querySelector('.nav-item[data-view="chat"]');
+  if (!btn || !btn.querySelector) return;
+  let b = btn.querySelector('.nav-badge');
+  const n0 = chatUnreadTotal();
+  if (!n0) { if (b) b.remove(); return; }
+  if (!b) { b = document.createElement('span'); b.className = 'nav-badge'; btn.appendChild(b); }
+  b.textContent = n0 > 99 ? '99+' : n0;
+}
+// compte les messages non lus (au démarrage et à l'ouverture de Messages)
+async function loadChatSummary() {
+  const rows = await run(sb.from('team_messages').select('id, channel, author_key, author_name, body, created_at').order('created_at', { ascending: false }).limit(400));
+  const read = chatRead(); const unread = {}; const last = {};
+  for (const m of rows) {
+    if (!last[m.channel]) last[m.channel] = m;
+    if (m.author_key !== myKey() && m.created_at > (read[m.channel] || '1970')) unread[m.channel] = (unread[m.channel] || 0) + 1;
+  }
+  S.chatUnread = unread; S.chatLast = last;
+  updateChatBadge();
+}
+function startTeamChat() {
+  if (S.teamChannel || !sb) return;
+  S.teamChannel = sb.channel('team-chat').on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'team_messages' }, (payload) => {
+    const m = payload.new;
+    S.chatLast = S.chatLast || {}; S.chatLast[m.channel] = m;
+    const open = S.view === 'chat' && S.chatChannel === m.channel && document.hasFocus();
+    if (S.view === 'chat' && S.chatChannel === m.channel) {
+      if (!(S.chatMsgs || []).some((x) => x.id === m.id)) { S.chatMsgs.push(m); renderTeamLog(); }
+      if (open) markChatRead(m.channel, m.created_at);
+    }
+    if (m.author_key !== myKey() && !open) {
+      S.chatUnread = S.chatUnread || {};
+      S.chatUnread[m.channel] = (S.chatUnread[m.channel] || 0) + 1;
+      updateChatBadge();
+      const pf = prefs();
+      if (pf.sMessage) playSound();
+      const where = m.channel === 'general' ? ' · Général' : ' · privé';
+      toast(`${m.author_name}${where} : ${m.body.slice(0, 80)}`);
+      try {
+        if (pf.winNotif && !document.hasFocus() && window.Notification) {
+          const w = new Notification(m.author_name + where, { body: m.body.slice(0, 140) });
+          w.onclick = () => { window.focus(); S.chatChannel = m.channel; go('chat'); };
+        }
+      } catch (_) { /* rien */ }
+    }
+    if (S.view === 'chat') renderChatList();
+  }).subscribe();
+}
+function stopTeamChat() { if (S.teamChannel && sb) { sb.removeChannel(S.teamChannel); S.teamChannel = null; } }
+
+async function viewChat(main) {
+  await Promise.all([loadProfiles(), loadChatSummary()]);
+  S.chatChannel = S.chatChannel || 'general';
+  main.innerHTML = `${head('Messages', 'Le groupe général et tes conversations privées')}
+    <div class="tchat card">
+      <aside class="tchat-list" id="tchat-list"></aside>
+      <section class="tchat-main">
+        <div class="tchat-head" id="tchat-head"></div>
+        <div class="tchat-log" id="tchat-log"><div class="muted">Chargement…</div></div>
+        <form class="tchat-form" data-form="team-msg">
+          <textarea name="body" rows="1" maxlength="2000" placeholder="Écris un message… (Entrée pour envoyer, Maj+Entrée pour aller à la ligne)" required></textarea>
+          <button class="primary" type="submit">${ic('send')}</button>
+        </form>
+      </section>
+    </div>`;
+  renderChatList();
+  await openChannel(S.chatChannel);
+}
+function renderChatList() {
+  const box = $('#tchat-list');
+  if (!box) return;
+  const me = myKey();
+  const item = (ch, avatar, name, sub) => {
+    const un = (S.chatUnread || {})[ch] || 0;
+    const last = (S.chatLast || {})[ch];
+    return `<button class="tchat-item ${S.chatChannel === ch ? 'active' : ''}" data-action="chat-open" data-ch="${esc(ch)}">
+      ${avatar}<span class="tchat-who"><b>${esc(name)}</b><span class="muted small">${last ? esc((last.author_key === me ? 'Toi : ' : '') + last.body.slice(0, 40)) : esc(sub)}</span></span>
+      ${un ? `<span class="nav-badge">${un}</span>` : ''}</button>`;
+  };
+  const members = (S.profiles || []).filter((p) => p.key !== me);
+  box.innerHTML = `<div class="nav-group">Groupe</div>
+    ${item('general', `<span class="avatar general">#</span>`, 'Général', 'Toute l\'équipe')}
+    <div class="nav-group">Messages privés</div>
+    ${members.map((p) => item(dmChannel(me, p.key), avatarHtml(p.name), p.name, p.tagline || p.role || '')).join('') || '<div class="muted small" style="padding:8px">Personne d\'autre pour l\'instant.</div>'}`;
+}
+async function openChannel(ch) {
+  S.chatChannel = ch;
+  const other = chanOther(ch); const m = other ? memberByKey(other) : null;
+  const headEl = $('#tchat-head');
+  if (headEl) {
+    headEl.innerHTML = ch === 'general'
+      ? `<span class="avatar general">#</span><div><b>Général</b><div class="muted small">Toute l'équipe voit ces messages</div></div>`
+      : `${m ? avatarHtml(m.name) : ''}<div><b>${esc(chanTitle(ch))}</b><div class="muted small">Conversation privée : vous deux seulement</div></div>
+         ${m ? `<button class="sm ghost" style="margin-left:auto" data-action="profile" data-name="${esc(m.name)}">Voir le profil</button>` : ''}`;
+  }
+  const rows = await run(sb.from('team_messages').select('*').eq('channel', ch).order('created_at', { ascending: false }).limit(150));
+  S.chatMsgs = rows.reverse();
+  renderTeamLog();
+  const lastAt = S.chatMsgs.length ? S.chatMsgs[S.chatMsgs.length - 1].created_at : new Date().toISOString();
+  markChatRead(ch, lastAt);
+  if (S.chatUnread) delete S.chatUnread[ch];
+  updateChatBadge(); renderChatList();
+  const ta = document.querySelector('.tchat-form textarea'); if (ta && ta.focus) ta.focus();
+}
+function renderTeamLog() {
+  const log = $('#tchat-log');
+  if (!log) return;
+  const me = myKey();
+  let prevDay = '';
+  log.innerHTML = (S.chatMsgs || []).length ? S.chatMsgs.map((m) => {
+    const day = new Date(m.created_at).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+    const sep = day !== prevDay ? `<div class="tchat-day"><span>${esc(day)}</span></div>` : '';
+    prevDay = day;
+    const mine = m.author_key === me;
+    return `${sep}<div class="msg-line ${mine ? 'mine' : ''}">${avatarHtml(m.author_name, 'sm')}<div class="msg">
+      <div class="who">${esc(m.author_name)} · ${new Date(m.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</div>
+      <div class="txt">${esc(m.body)}</div></div></div>`;
+  }).join('') : emptyBox(S.chatChannel === 'general' ? 'Aucun message. Dis bonjour à l\'équipe !' : 'Aucun message. Lance la conversation !', 'send');
+  log.scrollTop = log.scrollHeight;
 }
 
 /* ---------------- photos de profil ---------------- */
@@ -857,13 +1014,13 @@ async function onActivate(form, inShell) {
 /* ---------------- structure ---------------- */
 const NAV_ADMIN = [
   ['Principal', [['dashboard', 'home', 'Tableau de bord'], ['orders', 'list', 'Commandes'], ['boosters', 'users', 'Équipe']]],
-  ['Communication', [['announcements', 'megaphone', 'Annonces'], ['profiles', 'users', 'Profils'], ['wallet', 'trophy', 'Wallet équipe']]],
+  ['Communication', [['chat', 'send', 'Messages'], ['announcements', 'megaphone', 'Annonces'], ['profiles', 'users', 'Profils'], ['wallet', 'trophy', 'Wallet équipe']]],
   ['Argent', [['eldorado', 'globe', 'Eldorado'], ['withdrawals', 'wallet', 'Wallet Eldorado'], ['payments', 'send', 'Paiements']]],
   ['Outils', [['calc', 'chart', 'Calculateur'], ['licenses', 'key', 'Licences'], ['settings', 'settings', 'Paramètres']]],
 ];
 const NAV_BOOSTER = [
   ['Mon espace', [['home', 'home', 'Accueil'], ['myorders', 'list', 'Mes commandes'], ['earnings', 'dollar', 'Mes gains']]],
-  ['Équipe', [['profiles', 'users', 'Profils'], ['wallet', 'trophy', 'Wallet équipe']]],
+  ['Équipe', [['chat', 'send', 'Messages'], ['profiles', 'users', 'Profils'], ['wallet', 'trophy', 'Wallet équipe']]],
   ['Compte', [['mysettings', 'settings', 'Paramètres'], ['license', 'key', 'Ma licence']]],
 ];
 
@@ -886,6 +1043,8 @@ function renderShell(view) {
     <main class="main" id="main"></main>
   </div>`;
   startNotifications();
+  startTeamChat();
+  loadChatSummary().catch(() => { /* messagerie pas encore installée dans Supabase */ });
   if (window.desktop && window.desktop.version) {
     window.desktop.version().then((v) => { const el = $('#app-version'); if (el) el.textContent = 'v' + v; }).catch(() => {});
   }
@@ -964,6 +1123,7 @@ async function startNotifications() {
 function stopChat() { if (S.chat) { sb.removeChannel(S.chat); S.chat = null; } }
 function stopRealtime() {
   stopChat();
+  stopTeamChat();
   if (S.notifChannel && sb) { sb.removeChannel(S.notifChannel); S.notifChannel = null; }
 }
 
@@ -2055,7 +2215,7 @@ const VIEWS = {
   dashboard: viewDashboard, orders: viewOrders, order: viewOrder, boosters: viewBoosters,
   announcements: viewAnnouncements, wallet: viewWallet, notifs: viewNotifs, payments: viewPayments,
   withdrawals: viewWithdrawals, eldorado: viewEldorado, calc: viewCalc, licenses: viewLicenses, settings: viewSettings,
-  home: viewHome, myorders: viewMyOrders, earnings: viewEarnings, license: viewLicense, profiles: viewProfiles, mysettings: viewMySettings,
+  home: viewHome, myorders: viewMyOrders, earnings: viewEarnings, license: viewLicense, profiles: viewProfiles, mysettings: viewMySettings, chat: viewChat,
 };
 
 /* =====================================================================
@@ -2068,6 +2228,8 @@ const ACTIONS = {
   nav: (el) => go(el.dataset.view),
   logout: () => logout(),
   avatar: () => openAvatar(),
+  'chat-open': (el) => openChannel(el.dataset.ch),
+  'chat-with': (el) => { S.chatChannel = dmChannel(myKey(), el.dataset.key); go('chat'); },
   'pref-accent-auto': () => { setPref('accent', ''); applyTheme(S.currentTheme); refresh(); },
   'sound-test': () => playSound(null, true),
   'otp-resend': async (el) => {
@@ -2236,17 +2398,23 @@ const FORMS = {
   otp: async (f) => {
     const token = otpValue(f);
     if (!/^\d{6}$/.test(token)) return render2FA('Entre les 6 chiffres du code.');
-    const { error } = await sb.auth.verifyOtp({ email: S.access.email, token, type: 'email' });
+    const { error } = await verifyCode(token);
     if (error) return render2FA(/expired|invalid/i.test(error.message || '') ? 'Code incorrect ou expiré. Redemande un code si besoin.' : errMsg(error));
     S.otpSentAt = null; if (otpTimer) { clearInterval(otpTimer); otpTimer = null; }
     await loadAccess();
   },
   'otp-test': async (f) => {
     const token = otpValue(f);
-    const { error } = await sb.auth.verifyOtp({ email: S.access.email, token, type: 'email' });
-    if (error) return toast('Code incorrect ou expiré.', 'error');
+    const { error } = await verifyCode(token);
+    if (error) return toast('Code refusé : ' + errMsg(error), 'error');
     S.otpTested = true; S.otpSentAt = null; closeModal(); toast('Test réussi : tu peux activer l\'A2F');
     await loadRefs(); refresh();
+  },
+  'team-msg': async (f) => {
+    const ta = f.elements.body; const body = ta.value.trim();
+    if (!body) return;
+    ta.value = ''; ta.style.height = '';
+    try { await run(sb.rpc('send_team_message', { p_channel: S.chatChannel || 'general', p_body: body })); } catch (e) { ta.value = body; toast(errMsg(e), 'error'); }
   },
   profile: async (f) => {
     const o = formData(f);
@@ -2396,6 +2564,9 @@ document.addEventListener('submit', (e) => {
   if (f && FORMS[f.dataset.form]) { e.preventDefault(); FORMS[f.dataset.form](f, e.submitter); }
 });
 document.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey && e.target.closest && e.target.closest('.tchat-form')) {
+    e.preventDefault(); e.target.closest('form').requestSubmit(); return;
+  }
   if (e.key === 'Backspace' && e.target.classList && e.target.classList.contains('otp') && !e.target.value) {
     const boxes = [...e.target.closest('form').querySelectorAll('input.otp')];
     const i = boxes.indexOf(e.target); if (boxes[i - 1]) { boxes[i - 1].focus(); boxes[i - 1].value = ''; }

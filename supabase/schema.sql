@@ -992,6 +992,64 @@ language sql stable security definer set search_path = public as $$
 $$;
 
 -- ---------------------------------------------------------------------
+-- MESSAGERIE D'ÉQUIPE (v3.1) : groupe général + messages privés
+-- ---------------------------------------------------------------------
+-- salon 'general', ou 'dm:<clé A>:<clé B>' (clés triées ; 'owner' = Flowey, sinon id du booster)
+create table if not exists public.team_messages (
+  id          bigserial primary key,
+  channel     text not null check (channel = 'general' or channel like 'dm:%'),
+  author_key  text not null,
+  author_name text not null,
+  body        text not null check (length(trim(body)) > 0 and length(body) <= 2000),
+  created_at  timestamptz not null default now()
+);
+create index if not exists team_messages_channel_idx on public.team_messages(channel, created_at desc);
+
+create or replace function public.my_key() returns text
+language sql stable security definer set search_path = public as $$
+  select case when public.is_admin() then 'owner' else public.my_booster_id()::text end;
+$$;
+
+-- lecture : le salon général, et seulement MES conversations privées (même Flowey ne lit pas celles des autres)
+alter table public.team_messages enable row level security;
+drop policy if exists team_read on public.team_messages;
+create policy team_read on public.team_messages for select
+  using (public.has_access() and (channel = 'general'
+         or (public.my_key() is not null and public.my_key() = any (string_to_array(substr(channel, 4), ':')))));
+
+create or replace function public.send_team_message(p_channel text, p_body text) returns bigint
+language plpgsql security definer set search_path = public as $$
+declare k text := public.my_key(); parts text[]; nm text; new_id bigint;
+begin
+  if not public.has_access() or k is null then raise exception 'Accès refusé'; end if;
+  if coalesce(trim(p_body), '') = '' then raise exception 'Message vide'; end if;
+  if p_channel <> 'general' then
+    if p_channel not like 'dm:%' then raise exception 'Salon inconnu'; end if;
+    parts := string_to_array(substr(p_channel, 4), ':');
+    if array_length(parts, 1) <> 2 or not (k = any (parts)) or parts[1] >= parts[2] then raise exception 'Conversation invalide'; end if;
+    -- l'autre personne doit exister
+    if not exists (select 1 from (select 'owner' as kk union all select id::text from boosters where active) m
+                   where m.kk = case when parts[1] = k then parts[2] else parts[1] end) then
+      raise exception 'Destinataire inconnu';
+    end if;
+  end if;
+  nm := case when k = 'owner' then 'Flowey' else (select name from boosters where id::text = k) end;
+  insert into team_messages (channel, author_key, author_name, body)
+  values (p_channel, k, nm, left(trim(p_body), 2000)) returning id into new_id;
+  return new_id;
+end $$;
+
+do $$
+begin
+  if exists (select 1 from pg_publication where pubname = 'supabase_realtime') then
+    begin
+      alter publication supabase_realtime add table public.team_messages;
+    exception when duplicate_object then null;
+    end;
+  end if;
+end $$;
+
+-- ---------------------------------------------------------------------
 -- RENOMMER / SUPPRIMER UN BOOSTER (v2.6)
 -- ---------------------------------------------------------------------
 create or replace function public.admin_rename_booster(p_id uuid, p_name text) returns void
@@ -1034,7 +1092,7 @@ begin
   foreach f in array array['my_access()','claim_admin()','activate_license(text)',
       'admin_create_license(uuid,int,text)','admin_extend_license(text,int)','set_my_availability(text)','set_my_payout(text,text)',
       'booster_set_stage(uuid,text)','my_orders()','my_order(uuid)','my_summary()','team_wallet()',
-      'admin_dashboard(int,int)','set_my_avatar(text)','team_avatars()','admin_rename_booster(uuid,text)','admin_delete_booster(uuid)','set_my_profile(jsonb)','team_profiles()'] loop
+      'admin_dashboard(int,int)','set_my_avatar(text)','team_avatars()','admin_rename_booster(uuid,text)','admin_delete_booster(uuid)','set_my_profile(jsonb)','team_profiles()','send_team_message(text,text)','my_key()'] loop
     execute format('revoke execute on function public.%s from public, anon', f);
     execute format('grant execute on function public.%s to authenticated', f);
   end loop;
