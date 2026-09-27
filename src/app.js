@@ -1484,12 +1484,14 @@ function licenseStatus(l) {
 }
 
 async function viewLicenses(main) {
+  await loadRefs(); // liste des boosters toujours à jour
   const rows = await run(sb.from('licenses').select('*, profiles(email)').order('created_at', { ascending: false }));
   const pre = S.licPreset;
+  const pick = [...S.boosters].sort((x, y) => (y.active === false ? 0 : 1) - (x.active === false ? 0 : 1) || String(x.name).localeCompare(String(y.name)));
   main.innerHTML = `${head('Licences', 'Les clés d\'accès de tes boosters : crée, prolonge ou coupe un accès')}
   <form class="card" data-form="license"><div class="card-head"><h2>Générer une clé</h2></div>
     ${S.boosters.length ? `<div class="form-grid">
-      ${field('Booster', `<select name="booster_id" required>${S.boosters.filter((b) => b.active).map((b) => opt(b.id, b.name, b.id === pre)).join('')}</select>`)}
+      ${field('Booster', `<select name="booster_id" required>${pick.map((b) => opt(b.id, b.name + (b.active === false ? ' (inactif)' : ''), b.id === pre)).join('')}</select>`)}
       ${field('Durée', `<select name="days">${[[7, '7 jours'], [30, '30 jours'], [90, '3 mois'], [180, '6 mois'], [365, '1 an']].map(([v, l]) => opt(v, l, v === 30)).join('')}</select>`)}
       ${field('Note', '<input name="note" placeholder="ex. octobre">')}
     </div>
