@@ -1111,6 +1111,36 @@ end $$;
 drop function if exists public.send_team_message(text, text);
 
 -- ---------------------------------------------------------------------
+-- JOURNAL DES ERREURS DE L'APP (v3.4) : les plantages des boosters remontent à Flowey
+-- ---------------------------------------------------------------------
+create table if not exists public.app_errors (
+  id         bigserial primary key,
+  created_at timestamptz not null default now(),
+  who        text,
+  version    text,
+  kind       text,
+  message    text
+);
+alter table public.app_errors enable row level security;
+drop policy if exists admin_all on public.app_errors;
+create policy admin_all on public.app_errors for all using (public.is_admin()) with check (public.is_admin());
+
+create or replace function public.report_error(p_kind text, p_message text, p_version text) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if auth.uid() is null then return; end if;
+  -- anti-abus : 30 rapports max par heure et par personne
+  if (select count(*) from app_errors e where e.who = coalesce((select b.name from profiles p join boosters b on b.id = p.booster_id where p.id = auth.uid()),
+        (select email from profiles where id = auth.uid())) and e.created_at > now() - interval '1 hour') >= 30 then return; end if;
+  insert into app_errors (who, version, kind, message)
+  values (coalesce((select b.name from profiles p join boosters b on b.id = p.booster_id where p.id = auth.uid()),
+                   case when exists (select 1 from profiles where id = auth.uid() and role = 'admin') then 'Flowey' end,
+                   (select email from profiles where id = auth.uid())),
+          left(p_version, 20), left(p_kind, 30), left(p_message, 1500));
+  delete from app_errors where created_at < now() - interval '30 days';
+end $$;
+
+-- ---------------------------------------------------------------------
 -- RENOMMER / SUPPRIMER UN BOOSTER (v2.6)
 -- ---------------------------------------------------------------------
 create or replace function public.admin_rename_booster(p_id uuid, p_name text) returns void
@@ -1153,7 +1183,7 @@ begin
   foreach f in array array['my_access()','claim_admin()','activate_license(text)',
       'admin_create_license(uuid,int,text)','admin_extend_license(text,int)','set_my_availability(text)','set_my_payout(text,text)',
       'booster_set_stage(uuid,text)','my_orders()','my_order(uuid)','my_summary()','team_wallet()',
-      'admin_dashboard(int,int)','set_my_avatar(text)','team_avatars()','admin_rename_booster(uuid,text)','admin_delete_booster(uuid)','set_my_profile(jsonb)','team_profiles()','send_team_message(text,text,jsonb)','my_key()'] loop
+      'admin_dashboard(int,int)','set_my_avatar(text)','team_avatars()','admin_rename_booster(uuid,text)','admin_delete_booster(uuid)','set_my_profile(jsonb)','team_profiles()','send_team_message(text,text,jsonb)','my_key()','report_error(text,text,text)'] loop
     execute format('revoke execute on function public.%s from public, anon', f);
     execute format('grant execute on function public.%s to authenticated', f);
   end loop;

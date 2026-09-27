@@ -5,6 +5,7 @@ contextBridge.exposeInMainWorld('desktop', {
   onUpdate: (callback) => ipcRenderer.on('updater', (_event, status) => callback(status)),
   installUpdate: () => ipcRenderer.invoke('updater-install'),
   version: () => ipcRenderer.invoke('app-version'),
+  crashLog: () => ipcRenderer.invoke('crash-log'),
   download: (url) => ipcRenderer.invoke('download-url', url),
   setZoom: (f) => ipcRenderer.invoke('set-zoom', f),
   gpu: () => ipcRenderer.invoke('gpu-get'),

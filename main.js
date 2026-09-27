@@ -12,9 +12,21 @@ let bootPrefs = {};
 try { bootPrefs = JSON.parse(fs0.readFileSync(bootPrefsPath(), 'utf8')) || {}; } catch (_) { bootPrefs = {}; }
 if (bootPrefs.gpu === false) app.disableHardwareAcceleration();
 
-if (!app.requestSingleInstanceLock()) {
-  app.quit();
+// une seule fenêtre de l'app à la fois (une 2e ouverture remet la 1re au premier plan)
+const gotLock = app.requestSingleInstanceLock();
+if (!gotLock) app.quit();
+
+// journal des plantages : gardé sur le PC et montré au prochain démarrage
+const crashLogPath = () => path.join(app.getPath('userData'), 'crash.log');
+function logCrash(kind, detail) {
+  try {
+    const line = `${new Date().toISOString()} | v${app.getVersion()} | ${kind} | ${String(detail && (detail.stack || detail.message || JSON.stringify(detail)) || detail).slice(0, 1500)}\n`;
+    fs0.appendFileSync(crashLogPath(), line);
+  } catch (_) { /* rien */ }
 }
+process.on('uncaughtException', (e) => logCrash('main', e)); // l'app ne se ferme plus sur une erreur imprévue
+process.on('unhandledRejection', (e) => logCrash('main-promise', e));
+app.on('child-process-gone', (_e, d) => { if (d && d.reason !== 'clean-exit') logCrash('process-' + d.type, d); });
 
 const fs = require('fs');
 let win;
@@ -68,10 +80,24 @@ function createWindow() {
     if (!url.startsWith('file://')) e.preventDefault();
   });
   win.webContents.once('did-finish-load', setupUpdater);
+  // si l'affichage plante, on le recharge au lieu de laisser une fenêtre vide
+  win.webContents.on('render-process-gone', (_e, d) => {
+    logCrash('fenetre', d);
+    if (d && d.reason !== 'clean-exit' && win && !win.isDestroyed()) setTimeout(() => { try { win.reload(); } catch (_) { /* rien */ } }, 800);
+  });
+  win.on('unresponsive', () => logCrash('fenetre', 'ne répond plus'));
 }
+ipcMain.handle('crash-log', () => {
+  try {
+    const txt = fs0.readFileSync(crashLogPath(), 'utf8');
+    fs0.unlinkSync(crashLogPath());
+    return txt.trim().split('\n').slice(-5);
+  } catch (_) { return []; }
+});
 
 /* ---------------- mises à jour automatiques ---------------- */
 let updaterReady = false;
+const startedAt = Date.now();
 function setupUpdater() {
   if (!app.isPackaged || updaterReady) return; // pas de mise à jour en mode test (2-TESTER.bat)
   updaterReady = true;
@@ -87,7 +113,16 @@ function setupUpdater() {
   let version = null;
   autoUpdater.on('update-available', (info) => { version = info.version; send({ state: 'downloading', version, percent: 0 }); });
   autoUpdater.on('download-progress', (p) => send({ state: 'downloading', version, percent: Math.round(p.percent || 0) }));
-  autoUpdater.on('update-downloaded', (info) => send({ state: 'ready', version: info.version }));
+  autoUpdater.on('update-downloaded', (info) => {
+    // mise à jour prête dans les 2 premières minutes : on redémarre tout de suite, proprement
+    // (sinon l'installation se ferait en fond à la fermeture et couperait l'app si on la rouvre trop vite)
+    if (Date.now() - startedAt < 120000) {
+      send({ state: 'installing', version: info.version });
+      setTimeout(() => { try { autoUpdater.quitAndInstall(true, true); } catch (e) { logCrash('maj', e); } }, 4000);
+    } else {
+      send({ state: 'ready', version: info.version });
+    }
+  });
   autoUpdater.on('error', (err) => console.error('Mise à jour :', err && err.message));
   const check = () => autoUpdater.checkForUpdates().catch(() => { /* hors ligne ou pas encore configuré */ });
   check();
@@ -162,19 +197,9 @@ function shortcutPaths() {
   }
   return out;
 }
-let lastIco = null;
-function setTaskbarIcon(icoPath) {
-  if (process.platform !== 'win32' || !win || win.isDestroyed()) return;
-  lastIco = icoPath || lastIco;
-  try {
-    win.setAppDetails({
-      appId: 'com.flowey.boostmanager',
-      appIconPath: lastIco || process.execPath, appIconIndex: 0,
-      relaunchCommand: `"${process.execPath}"`, relaunchDisplayName: "Flowey's Software Manager",
-    });
-  } catch (_) { /* rien */ }
+function setTaskbarIcon() {
   const sq = squareLogo();
-  if (sq) win.setIcon(sq);
+  if (sq && win && !win.isDestroyed()) win.setIcon(sq);
 }
 function applyShortcutIcons() {
   if (process.platform !== 'win32' || !app.isPackaged) return 0;
@@ -197,10 +222,7 @@ function applyShortcutIcons() {
       if (shell.writeShortcutLink(lnk, 'update', { icon, iconIndex: 0 })) done++;
     } catch (_) { /* raccourci inaccessible : on passe */ }
   }
-  // bouton de l'app dans la barre des tâches (fenêtre ouverte)
-  setTaskbarIcon(icon);
-  // demande à Windows de rafraîchir ses icônes
-  try { require('child_process').spawn('ie4uinit.exe', ['-show'], { detached: true, stdio: 'ignore', windowsHide: true }).unref(); } catch (_) { /* rien */ }
+  setTaskbarIcon();
   return done;
 }
 function logoChanged() {
@@ -280,8 +302,17 @@ app.on('second-instance', () => {
 app.setAppUserModelId('com.flowey.boostmanager'); // nécessaire aux notifications Windows
 
 app.whenReady().then(() => {
+  if (!gotLock) return;
   createWindow();
-  // après une mise à jour, Windows remet l'icône de base sur les raccourcis : on remet celle de l'utilisateur
-  if (hasCustomLogo()) setTimeout(() => { try { applyShortcutIcons(); } catch (_) { /* rien */ } }, 1500);
+  // après une mise à jour, Windows remet l'icône de base sur les raccourcis : on remet celle de l'utilisateur (une fois par version)
+  if (hasCustomLogo() && bootPrefs.iconsFor !== app.getVersion()) {
+    setTimeout(() => {
+      try {
+        applyShortcutIcons();
+        bootPrefs.iconsFor = app.getVersion();
+        fs0.writeFileSync(bootPrefsPath(), JSON.stringify(bootPrefs));
+      } catch (e) { logCrash('icones', e); }
+    }, 4000);
+  }
 });
 app.on('window-all-closed', () => app.quit());

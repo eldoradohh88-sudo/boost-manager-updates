@@ -442,9 +442,11 @@ async function bannerTimeline(url, ctx) {
   const bin = atob(url.slice(m[0].length));
   const bytes = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  if (bytes.length > 12 * 1024 * 1024) return null; // GIF très lourd : on garde une couleur fixe
   const dec = new ImageDecoder({ data: bytes, type: m[1] });
   try {
     await dec.tracks.ready;
+    if (dec.tracks.selectedTrack && dec.tracks.selectedTrack.frameCount > 300) return null;
     const count = Math.min(dec.tracks.selectedTrack ? dec.tracks.selectedTrack.frameCount : 1, 240);
     const every = Math.max(1, Math.ceil(count / 24)); // au plus ~24 relevés de couleur (léger pour le processeur)
     const steps = []; let t = 0;
@@ -717,7 +719,7 @@ function insertAtCursor(ta, text) {
   const st = ta.selectionStart ?? ta.value.length; const en = ta.selectionEnd ?? ta.value.length;
   ta.value = ta.value.slice(0, st) + text + ta.value.slice(en);
   ta.selectionStart = ta.selectionEnd = st + text.length;
-  ta.focus();
+  ta.focus({ preventScroll: true });
 }
 
 /* ---------------- messages vocaux ---------------- */
@@ -886,7 +888,7 @@ async function openChannel(ch) {
   markChatRead(ch, lastAt);
   if (S.chatUnread) delete S.chatUnread[ch];
   updateChatBadge(); renderChatList();
-  const ta = document.querySelector('.tchat-form textarea'); if (ta && ta.focus) ta.focus();
+  const ta = document.querySelector('.tchat-form textarea'); if (ta && ta.focus) ta.focus({ preventScroll: true });
 }
 function renderTeamLog(keepScroll) {
   const log = $('#tchat-log');
@@ -1006,6 +1008,10 @@ function initUpdater() {
       updateBar(`${ic('download')}<span>Mise à jour ${u.version ? 'v' + esc(u.version) + ' ' : ''}en téléchargement… <b>${n(u.percent)} %</b></span>
         <div class="goal" style="width:120px;margin:0"><span style="width:${n(u.percent)}%;animation:none"></span></div>`);
     }
+    if (u.state === 'installing') {
+      updateBar(`${ic('rocket')}<span>Mise à jour vers <b>v${esc(u.version)}</b> : l'app redémarre dans quelques secondes…</span>`);
+      toast('Mise à jour vers v' + u.version + ' : redémarrage automatique…');
+    }
     if (u.state === 'ready') {
       S.updateReady = u.version;
       updateBar(`${ic('sparkles')}<span>Version <b>${esc(u.version)}</b> prête</span><button class="sm primary" data-action="install-update">Redémarrer</button>`);
@@ -1017,6 +1023,26 @@ function initUpdater() {
         <p class="muted small">« Plus tard » : elle s'installera automatiquement à la prochaine fermeture de l'app.</p>`, 'small');
     }
   });
+}
+
+/* ---------------- rapport de plantage ---------------- */
+let lastErrAt = 0;
+function reportError(kind, message) {
+  if (!sb || Date.now() - lastErrAt < 5000) return;
+  lastErrAt = Date.now();
+  let v = ''; try { v = S.appVersion || ''; } catch (_) { /* rien */ }
+  sb.rpc('report_error', { p_kind: kind, p_message: String(message).slice(0, 1500), p_version: v }).then(() => {}, () => {});
+}
+window.addEventListener('error', (e) => reportError('js', (e.error && e.error.stack) || e.message));
+window.addEventListener('unhandledrejection', (e) => reportError('js-promise', (e.reason && (e.reason.stack || e.reason.message)) || e.reason));
+async function checkLastCrash() {
+  if (!window.desktop || !window.desktop.crashLog) return;
+  try {
+    const lines = await window.desktop.crashLog();
+    if (!lines || !lines.length) return;
+    lines.forEach((l) => reportError('plantage', l));
+    toast('L\'app a rencontré un problème la dernière fois : il a été signalé à Flowey.', 'error');
+  } catch (_) { /* rien */ }
 }
 
 /* ---------------- démarrage ---------------- */
@@ -1197,10 +1223,11 @@ function renderShell(view) {
   </div>`;
   startNotifications();
   startTeamChat();
+  if (!S.crashChecked) { S.crashChecked = true; setTimeout(checkLastCrash, 3000); }
   loadChatSummary().catch(() => { /* messagerie pas encore installée dans Supabase */ });
   setTimeout(prefetchViews, 2500);
   if (window.desktop && window.desktop.version) {
-    window.desktop.version().then((v) => { const el = $('#app-version'); if (el) el.textContent = 'v' + v; }).catch(() => {});
+    window.desktop.version().then((v) => { S.appVersion = v; const el = $('#app-version'); if (el) el.textContent = 'v' + v; }).catch(() => {});
   }
   go(view);
 }
@@ -1222,6 +1249,7 @@ async function go(view, keepChat) {
   box.innerHTML = cached || '<div class="skeleton"><div></div><div></div><div></div></div>';
   if (cached) box.classList.add('stale');
   main.replaceChildren(box);
+  main.classList.toggle('chat-mode', view === 'chat');
   if (!keepChat) main.scrollTop = 0;
   try {
     await VIEWS[view](box);
@@ -2265,10 +2293,17 @@ async function viewLicenses(main) {
 }
 
 async function viewSettings(main) {
-  await Promise.all([loadRefs(false), window.desktop && window.desktop.gpu ? window.desktop.gpu().then((g) => { S.gpu = g; }).catch(() => {}) : null]);
+  let errs = [];
+  await Promise.all([loadRefs(false), window.desktop && window.desktop.gpu ? window.desktop.gpu().then((g) => { S.gpu = g; }).catch(() => {}) : null,
+    sb.from('app_errors').select('*').order('created_at', { ascending: false }).limit(30).then((r) => { errs = r.data || []; }, () => {})]);
   main.innerHTML = `${head('Paramètres', 'Taux Eldorado, règles de partage, photo et logo')}
   ${personalSettingsHtml()}
   <h2 class="section-title">${ic('settings')} Réglages de l'équipe</h2>
+  <div class="card"><div class="card-head"><h2>${ic('bell')} Journal des erreurs</h2><span class="muted small">plantages et bugs remontés par les apps de l'équipe (30 jours)</span></div>
+    ${errs && errs.length ? `<div class="table-wrap"><table><thead><tr><th>Quand</th><th>Qui</th><th>Version</th><th>Type</th><th>Détail</th></tr></thead><tbody>
+      ${errs.map((x) => `<tr><td>${fdt(x.created_at)}</td><td class="strong">${esc(x.who || '—')}</td><td>${esc(x.version || '')}</td><td>${esc(x.kind || '')}</td>
+        <td class="small" style="max-width:520px;word-break:break-word">${esc((x.message || '').slice(0, 300))}</td></tr>`).join('')}</tbody></table></div>`
+    : emptyBox('Aucune erreur remontée. Tout va bien !', 'check')}</div>
   <div class="grid-2">
     <div class="card"><div class="card-head"><h2>Frais Eldorado</h2></div>
       <p class="muted small">Chaque commande prend le taux en vigueur à sa date. Pour un nouveau taux, ajoute une date d'effet : les anciennes commandes ne changent pas.</p>
@@ -2614,7 +2649,7 @@ const FORMS = {
       const ep = $('#emoji-panel'); if (ep) ep.classList.add('hidden');
     } catch (e) { ta.value = body; toast(errMsg(e), 'error'); }
     S.chatSending = false; if (btn) btn.disabled = false;
-    if (ta.focus) ta.focus();
+    if (ta.focus) ta.focus({ preventScroll: true });
   },
   profile: async (f) => {
     const o = formData(f);

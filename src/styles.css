@@ -575,3 +575,10 @@ body.extra-round button, body.extra-round .btn, body.extra-round input, body.ext
 .tts-btn .icon { width: 14px; height: 14px; }
 .att-audio { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
 .att-audio audio { height: 36px; max-width: 280px; }
+
+/* ---------- page Messages : occupe exactement la fenêtre, seule la conversation défile ---------- */
+.main.chat-mode { display: flex; flex-direction: column; overflow: hidden; padding-bottom: 24px; }
+.main.chat-mode > .view { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.main.chat-mode .page-head { flex: none; margin-bottom: 18px; }
+.main.chat-mode .tchat { flex: 1 1 auto; height: auto; min-height: 0; }
+.tchat, .tchat-main { overflow: clip; }
