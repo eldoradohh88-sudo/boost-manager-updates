@@ -230,7 +230,7 @@ function shortcutPaths() {
   ];
   const out = [];
   for (const d of dirs) {
-    try { for (const f of fs.readdirSync(d)) if (/\.lnk$/i.test(f)) out.push(path.join(d, f)); } catch (_) { /* dossier absent */ }
+    try { for (const f of fs.readdirSync(d)) if (/^(flowey|boost).*\.lnk$/i.test(f)) out.push(path.join(d, f)); } catch (_) { /* dossier absent */ }
   }
   return out;
 }
@@ -341,15 +341,6 @@ app.setAppUserModelId('com.flowey.boostmanager'); // nécessaire aux notificatio
 app.whenReady().then(() => {
   if (!gotLock) return;
   createWindow();
-  // après une mise à jour, Windows remet l'icône de base sur les raccourcis : on remet celle de l'utilisateur (une fois par version)
-  if (hasCustomLogo() && bootPrefs.iconsFor !== app.getVersion()) {
-    setTimeout(() => {
-      try {
-        applyShortcutIcons();
-        bootPrefs.iconsFor = app.getVersion();
-        fs0.writeFileSync(bootPrefsPath(), JSON.stringify(bootPrefs));
-      } catch (e) { logCrash('icones', e); }
-    }, 4000);
-  }
+  // (plus aucune modification des raccourcis Windows au démarrage : c'était la cause des fermetures)
 });
 app.on('window-all-closed', () => app.quit());
