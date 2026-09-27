@@ -1114,6 +1114,7 @@ setInterval(async () => {
   if (!sb || !S.access || isAdmin()) return;
   try {
     const a = await run(sb.rpc('my_access'));
+    if (a.status === 'need_2fa') { S.access = a; stopRealtime(); start2FA(); return; } // A2F activée pendant qu'il était connecté
     if (a.status !== 'active') { S.access = a; stopRealtime(); renderGate(); }
   } catch (_) { /* hors ligne : on réessaiera */ }
 }, 10 * 60 * 1000);
