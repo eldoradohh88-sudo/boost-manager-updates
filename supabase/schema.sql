@@ -227,16 +227,26 @@ alter table public.app_settings add column if not exists eldorado_balance_at tim
 -- ---------------------------------------------------------------------
 -- 5. FONCTIONS D'ACCÈS
 -- ---------------------------------------------------------------------
+-- Double authentification (A2F, v3.0) : quand elle est activée, une session n'a accès
+-- aux données que si elle a été ouverte avec le code à 6 chiffres reçu par email.
+alter table public.app_settings add column if not exists require_2fa boolean not null default false;
+create or replace function public.mfa_ok() returns boolean
+language sql stable security definer set search_path = public as $$
+  select coalesce((select not require_2fa from app_settings where id = 1), true)
+    or exists (select 1 from jsonb_array_elements(coalesce(auth.jwt() -> 'amr', '[]'::jsonb)) e
+               where e ->> 'method' in ('otp', 'magiclink'));
+$$;
+
 create or replace function public.is_admin() returns boolean
 language sql stable security definer set search_path = public as $$
-  select exists (select 1 from profiles where id = auth.uid() and role = 'admin');
+  select public.mfa_ok() and exists (select 1 from profiles where id = auth.uid() and role = 'admin');
 $$;
 
 create or replace function public.has_access() returns boolean
 language sql stable security definer set search_path = public as $$
-  select public.is_admin() or exists (
+  select public.is_admin() or (public.mfa_ok() and exists (
     select 1 from licenses
-    where activated_by = auth.uid() and not revoked and expires_at > now());
+    where activated_by = auth.uid() and not revoked and expires_at > now()));
 $$;
 
 create or replace function public.my_booster_id() returns uuid
@@ -563,6 +573,9 @@ language plpgsql stable security definer set search_path = public as $$
 declare p profiles%rowtype; l licenses%rowtype;
         admin_exists boolean := exists (select 1 from profiles where role = 'admin');
 begin
+  if auth.uid() is not null and not public.mfa_ok() then
+    return jsonb_build_object('status','need_2fa','email', auth.jwt() ->> 'email');
+  end if;
   select * into p from profiles where id = auth.uid();
   if not found then return jsonb_build_object('status','none','admin_exists',admin_exists); end if;
   if p.role = 'admin' then

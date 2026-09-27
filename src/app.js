@@ -86,7 +86,11 @@ async function run(promise) {
   return count !== undefined && count !== null ? { data, count } : data;
 }
 function field(label, inner, extra = '') {
-  return `<div class="field" ${extra}><label>${esc(label)}</label>${inner}</div>`;
+  // extra peut contenir class="field span-2" : on fusionne au lieu de doubler l'attribut class
+  const m = extra.match(/class="([^"]*)"/);
+  const cls = m ? m[1] : 'field';
+  const rest = m ? extra.replace(m[0], '') : extra;
+  return `<div class="${cls}" ${rest}><label>${esc(label)}</label>${inner}</div>`;
 }
 function formData(form) {
   const o = {};
@@ -148,8 +152,11 @@ function applyTheme(vars) {
   const root = document.documentElement;
   themeKeys.forEach((k) => root.style.removeProperty(k)); // on repart du thème par défaut
   themeKeys = [];
-  if (!vars || typeof vars !== 'object') return;
-  Object.keys(vars).forEach((k) => { if (/^--[a-z0-9-]+$/.test(k)) { root.style.setProperty(k, String(vars[k])); themeKeys.push(k); } });
+  S.currentTheme = vars || null;
+  if (vars && typeof vars === 'object') {
+    Object.keys(vars).forEach((k) => { if (/^--[a-z0-9-]+$/.test(k)) { root.style.setProperty(k, String(vars[k])); themeKeys.push(k); } });
+  }
+  applyAccentOverride();
 }
 const logoSrc = () => S.logoUrl || 'logo.png';
 async function initTheme() {
@@ -162,6 +169,197 @@ async function initTheme() {
     if (vars) { applyTheme(vars); try { localStorage.setItem('bm_theme', JSON.stringify(vars)); } catch (_) { /* rien */ } }
     else { try { localStorage.removeItem('bm_theme'); } catch (_) { /* rien */ } }
   } catch (_) { /* thème par défaut */ }
+}
+
+/* ---------------- préférences personnelles (propres à chaque PC) ---------------- */
+const LOW_END = (navigator.hardwareConcurrency || 8) <= 4;
+const PREF_DEFAULTS = {
+  accent: '', zoom: '1', corners: 'round', anim: true, effects: !LOW_END, bannerColors: true,
+  sound: true, volume: 0.6, soundKind: 'chime', sOrder: true, sAnnounce: true, sMessage: true, sPayment: true, winNotif: true,
+};
+function prefs() {
+  let p = {};
+  try { p = JSON.parse(localStorage.getItem('bm_prefs') || '{}') || {}; } catch (_) { p = {}; }
+  return { ...PREF_DEFAULTS, ...p };
+}
+function setPref(k, v) {
+  const p = prefs(); p[k] = v;
+  try { localStorage.setItem('bm_prefs', JSON.stringify(p)); } catch (_) { /* rien */ }
+  applyPrefs();
+}
+function applyPrefs() {
+  const p = prefs(); const cl = document.body.classList;
+  cl.toggle('no-anim', !p.anim);
+  cl.toggle('no-effects', !p.effects);
+  cl.toggle('square', p.corners === 'square');
+  cl.toggle('extra-round', p.corners === 'extra');
+  if (window.desktop && window.desktop.setZoom) window.desktop.setZoom(Number(p.zoom) || 1).catch(() => {});
+}
+function hexHsl(hex) {
+  const v = parseInt(hex.slice(1), 16);
+  const r = (v >> 16 & 255) / 255; const g = (v >> 8 & 255) / 255; const b = (v & 255) / 255;
+  const mx = Math.max(r, g, b); const mn = Math.min(r, g, b); const l = (mx + mn) / 2;
+  let h = 0; let s = 0;
+  if (mx !== mn) {
+    const d = mx - mn; s = l > 0.5 ? d / (2 - mx - mn) : d / (mx + mn);
+    h = (mx === r ? (g - b) / d + (g < b ? 6 : 0) : mx === g ? (b - r) / d + 2 : (r - g) / d + 4) * 60;
+  }
+  return [Math.round(h), Math.round(s * 100), Math.round(l * 100)];
+}
+// couleur principale choisie à la main (sinon : automatique, d'après le logo ou la bannière)
+function applyAccentOverride() {
+  const p = prefs();
+  if (!/^#[0-9a-f]{6}$/i.test(p.accent || '')) return;
+  const [h, s0, l0] = hexHsl(p.accent);
+  const s = Math.max(45, s0); const l = Math.min(70, Math.max(52, l0));
+  const root = document.documentElement;
+  const set = (k, v) => { root.style.setProperty(k, v); if (!themeKeys.includes(k)) themeKeys.push(k); };
+  set('--accent', `hsl(${h} ${s}% ${l}%)`);
+  set('--accent-2', `hsl(${h} ${s}% ${Math.min(88, l + 14)}%)`);
+  set('--accent-soft', `hsl(${h} ${s}% ${l}% / .14)`);
+  set('--accent-line', `hsl(${h} ${s}% ${l}% / .45)`);
+  set('--accent-glow', `hsl(${h} ${s}% ${l}% / .32)`);
+  set('--accent-ink', l > 60 ? `hsl(${h} 45% 12%)` : '#ffffff');
+}
+
+/* ---------------- sons de notification (créés par l'app, aucun fichier) ---------------- */
+let audioCtx = null;
+const SOUNDS = [['chime', 'Carillon'], ['pop', 'Pop'], ['bell', 'Cloche'], ['soft', 'Doux'], ['arcade', 'Arcade']];
+function playSound(kind, force) {
+  const p = prefs();
+  if (!force && !p.sound) return;
+  try {
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    const ctx = audioCtx; const t0 = ctx.currentTime + 0.02;
+    const master = ctx.createGain(); master.gain.value = Math.max(0, Math.min(1, Number(p.volume))) * 0.5; master.connect(ctx.destination);
+    const note = (freq, start, dur, type = 'sine', g = 1) => {
+      const o = ctx.createOscillator(); const e = ctx.createGain();
+      o.type = type; o.frequency.value = freq;
+      e.gain.setValueAtTime(0.0001, t0 + start);
+      e.gain.exponentialRampToValueAtTime(g, t0 + start + 0.015);
+      e.gain.exponentialRampToValueAtTime(0.0001, t0 + start + dur);
+      o.connect(e); e.connect(master); o.start(t0 + start); o.stop(t0 + start + dur + 0.05);
+    };
+    const k = kind || p.soundKind;
+    if (k === 'pop') { note(660, 0, 0.12, 'triangle'); note(990, 0.07, 0.14, 'triangle', 0.7); }
+    else if (k === 'bell') { [523, 1046, 1568].forEach((f, i) => note(f, 0, 1.2 - i * 0.25, 'sine', 1 / (i + 1))); }
+    else if (k === 'soft') { note(440, 0, 0.5, 'sine', 0.8); note(660, 0.12, 0.6, 'sine', 0.6); }
+    else if (k === 'arcade') { [523, 659, 784, 1046].forEach((f, i) => note(f, i * 0.07, 0.1, 'square', 0.3)); }
+    else { note(880, 0, 0.35); note(1320, 0.12, 0.5, 'sine', 0.8); }
+  } catch (_) { /* pas de sortie audio */ }
+}
+function notifKind(title) {
+  if (/^Message/.test(title)) return 'sMessage';
+  if (/^(Annonce|Note de)/.test(title)) return 'sAnnounce';
+  if (/^Paiement/.test(title)) return 'sPayment';
+  return 'sOrder';
+}
+
+/* ---------------- réglages personnels (Paramètres, pour tout le monde) ---------------- */
+function onOff(key, label, help = '') {
+  const v = prefs()[key];
+  return field(label, `<select data-change="pref" data-key="${key}" data-type="bool">${opt('1', 'Activé', !!v)}${opt('0', 'Désactivé', !v)}</select>${help ? `<div class="muted small" style="margin-top:4px">${help}</div>` : ''}`);
+}
+function personalSettingsHtml() {
+  const p = prefs();
+  const accent = /^#[0-9a-f]{6}$/i.test(p.accent || '') ? p.accent : '';
+  return `<h2 class="section-title">${ic('sparkles')} Mes réglages <span class="muted small">— seulement sur ce PC</span></h2>
+  <div class="grid-2">
+    <div class="card"><div class="card-head"><h2>Apparence</h2></div>
+      <div class="form-grid">
+        ${field('Couleur principale', `<div style="display:flex;gap:8px;align-items:center"><input type="color" data-change="pref" data-key="accent" value="${accent || '#5b8def'}" style="width:70px">
+          <button type="button" class="sm ${accent ? '' : 'primary'}" data-action="pref-accent-auto">Automatique</button></div>
+          <div class="muted small" style="margin-top:4px">${accent ? 'Couleur choisie à la main.' : 'Automatique : suit ton logo ou ta bannière.'}</div>`)}
+        ${field('Taille de l\'interface', `<select data-change="pref" data-key="zoom">${[['0.85', 'Petite'], ['1', 'Normale'], ['1.1', 'Grande'], ['1.25', 'Très grande']].map(([v, l]) => opt(v, l, String(p.zoom) === v)).join('')}</select>`)}
+        ${field('Coins', `<select data-change="pref" data-key="corners">${opt('square', 'Carrés', p.corners === 'square')}${opt('round', 'Arrondis', p.corners === 'round')}${opt('extra', 'Très arrondis', p.corners === 'extra')}</select>`)}
+        ${onOff('anim', 'Animations')}
+        ${onOff('effects', 'Effets visuels (halos, flous)', 'Désactive si ton PC rame.')}
+        ${onOff('bannerColors', 'Couleurs qui suivent la bannière')}
+        ${window.desktop && window.desktop.setGpu ? field('Accélération graphique', `<select data-change="gpu"><option value="1" ${S.gpu !== false ? 'selected' : ''}>Activée</option><option value="0" ${S.gpu === false ? 'selected' : ''}>Désactivée</option></select>
+          <div class="muted small" style="margin-top:4px">Si l'app fait bugger ton PC : désactive (l'app redémarre).</div>`) : ''}
+      </div></div>
+    <div class="card"><div class="card-head"><h2>Sons et notifications</h2></div>
+      <div class="form-grid">
+        ${onOff('sound', 'Son des notifications')}
+        ${field('Son', `<div style="display:flex;gap:8px"><select data-change="pref" data-key="soundKind">${SOUNDS.map(([v, l]) => opt(v, l, p.soundKind === v)).join('')}</select>
+          <button type="button" class="sm" data-action="sound-test">▶ Tester</button></div>`)}
+        ${field('Volume', `<input type="range" min="0" max="1" step="0.05" value="${Number(p.volume)}" data-change="pref" data-key="volume" data-type="num">`)}
+        ${onOff('sOrder', 'Son : commandes')}
+        ${onOff('sAnnounce', 'Son : annonces et notes')}
+        ${onOff('sMessage', 'Son : messages du chat')}
+        ${onOff('sPayment', 'Son : paiements')}
+        ${onOff('winNotif', 'Notifications Windows', 'Petite fenêtre en bas à droite quand l\'app est en arrière-plan.')}
+      </div></div>
+  </div>
+  ${logoCard()}
+  ${bannerCard()}
+  <div class="card"><div class="card-head"><h2>${ic('users')} Mon profil</h2></div>
+    <p class="muted small">Photo (GIF accepté), bannière de profil, titre, bio, jeux, Discord, couleur : ce que l'équipe voit dans l'onglet Profils.</p>
+    <div class="form-actions"><button class="primary" data-action="my-profile">${ic('users')} Modifier mon profil</button></div></div>
+  ${securityCard()}`;
+}
+function securityCard() {
+  if (!isAdmin()) {
+    return `<div class="card"><div class="card-head"><h2>${ic('key')} Sécurité</h2></div>
+      <p class="muted small">Si Flowey active la double authentification, tu recevras à chaque connexion un code à 6 chiffres par email (valable 10 minutes).</p></div>`;
+  }
+  const on = !!(S.settings && S.settings.require_2fa);
+  return `<div class="card"><div class="card-head"><h2>${ic('key')} Double authentification (A2F)</h2>
+      <span class="badge ${on ? 'b-green' : 'b-grey'}">${on ? 'Activée' : 'Désactivée'}</span></div>
+    <p class="muted small">Quand elle est activée, chaque connexion demande un <b>code à 6 chiffres envoyé par email</b>, valable 10 minutes. Sans ce code, impossible de voir la moindre donnée, même avec le bon mot de passe.</p>
+    ${on ? '<div class="form-actions"><button class="danger" data-action="2fa-off">Désactiver l\'A2F</button></div>'
+    : `<ol class="muted small"><li>Configure l'envoi d'emails dans Supabase (voir le message de Claude).</li>
+        <li>Clique sur <b>Tester</b> : tu reçois un code, tape-le.</li><li>Si le test marche, le bouton <b>Activer</b> se débloque.</li></ol>
+      <div class="form-actions"><button data-action="2fa-test">${ic('send')} Tester l'envoi du code</button>
+        <button class="primary" data-action="2fa-on" ${S.otpTested ? '' : 'disabled'}>Activer l'A2F pour toute l'équipe</button></div>`}</div>`;
+}
+async function viewMySettings(main) {
+  if (window.desktop && window.desktop.gpu) { try { S.gpu = await window.desktop.gpu(); } catch (_) { /* rien */ } }
+  main.innerHTML = `${head('Paramètres', 'Personnalise ton app : couleurs, logo, bannière, sons, profil')}${personalSettingsHtml()}`;
+}
+
+/* ---------------- A2F : code à 6 chiffres par email ---------------- */
+let otpTimer = null;
+async function sendOtp() {
+  const email = S.access && S.access.email;
+  if (!email) throw new Error('Adresse email inconnue.');
+  const { error } = await sb.auth.signInWithOtp({ email, options: { shouldCreateUser: false } });
+  if (error) throw error;
+  S.otpSentAt = Date.now();
+}
+function otpBoxes() {
+  return `<div class="otp-boxes">${[0, 1, 2, 3, 4, 5].map((i) => `<input class="otp" inputmode="numeric" maxlength="6" autocomplete="one-time-code" data-i="${i}">`).join('')}</div>`;
+}
+function otpValue(root) { return [...root.querySelectorAll('input.otp')].map((x) => x.value).join(''); }
+function tickOtp() {
+  const el = $('#otp-timer'); const btn = $('#otp-resend');
+  if (!el) { clearInterval(otpTimer); otpTimer = null; return; }
+  const left = Math.max(0, (S.otpSentAt || 0) + 600000 - Date.now());
+  el.textContent = left ? `${Math.floor(left / 60000)}:${String(Math.floor(left / 1000) % 60).padStart(2, '0')}` : 'expiré';
+  el.classList.toggle('red', !left);
+  if (btn) btn.disabled = Date.now() - (S.otpSentAt || 0) < 60000;
+}
+function render2FA(error = '') {
+  const email = (S.access && S.access.email) || '';
+  $('#app').innerHTML = `<div class="center-screen"><form class="auth-card" data-form="otp">
+    <div class="brand"><img class="logo" src="${logoSrc()}" alt=""><h1>Vérification</h1></div>
+    <p class="muted">Un code à <b>6 chiffres</b> a été envoyé à <b>${esc(email)}</b>.<br>Il expire dans <b id="otp-timer">10:00</b>.</p>
+    ${otpBoxes()}
+    <div class="form-actions"><button class="primary" type="submit">Valider</button>
+      <button type="button" id="otp-resend" data-action="otp-resend">Renvoyer un code</button>
+      <button type="button" data-action="logout">Se déconnecter</button></div>
+    ${error ? `<div class="error-box">${esc(error)}</div>` : ''}
+    <p class="muted small">Pas reçu ? Regarde dans les spams. Tu peux redemander un code au bout d'une minute.</p></form></div>`;
+  const first = document.querySelector('input.otp'); if (first) first.focus();
+  if (otpTimer) clearInterval(otpTimer);
+  otpTimer = setInterval(tickOtp, 1000); tickOtp();
+}
+async function start2FA() {
+  let err = '';
+  if (!S.otpSentAt || Date.now() - S.otpSentAt > 600000) {
+    try { await sendOtp(); } catch (e) { err = 'Envoi du code impossible : ' + errMsg(e); }
+  }
+  render2FA(err);
 }
 
 /* ---------------- logo personnel (propre à chaque PC) ---------------- */
@@ -254,9 +452,11 @@ async function initBanner() {
   const c = document.createElement('canvas'); c.width = 48; c.height = 48;
   const ctx = c.getContext('2d', { willReadFrequently: true });
   await new Promise((res) => { img.onload = res; img.onerror = res; img.src = url; });
+  const pf = prefs();
+  if (!pf.bannerColors) { applyTheme(S.baseTheme); return; } // l'utilisateur garde les couleurs du logo
   const start = performance.now();
   let tl = null;
-  try { tl = await bannerTimeline(url, ctx); } catch (_) { tl = null; }
+  if (pf.effects) { try { tl = await bannerTimeline(url, ctx); } catch (_) { tl = null; } }
   if (!tl || tl.steps.length <= 1) { // image fixe (ou décodeur absent) : une seule couleur
     try { applyBannerPalette(tl && tl.steps[0] ? tl.steps[0].pal : paletteOf(img, ctx)); } catch (_) { /* rien */ }
     return;
@@ -514,6 +714,7 @@ function initUpdater() {
 /* ---------------- démarrage ---------------- */
 async function boot() {
   initUpdater();
+  applyPrefs();
   await initTheme();
   await initBanner();
   if (!window.supabase || !CFG.SUPABASE_URL || /COLLE/.test(CFG.SUPABASE_URL + CFG.SUPABASE_ANON_KEY)) {
@@ -540,6 +741,7 @@ async function loadAccess() {
     return renderAuth(errMsg(e));
   }
   const st = S.access.status;
+  if (st === 'need_2fa') return start2FA();
   if (st === 'admin') { await loadRefs(); return renderShell('dashboard'); }
   if (st === 'active') { await loadRefs(); return renderShell('home'); }
   renderGate();
@@ -662,7 +864,7 @@ const NAV_ADMIN = [
 const NAV_BOOSTER = [
   ['Mon espace', [['home', 'home', 'Accueil'], ['myorders', 'list', 'Mes commandes'], ['earnings', 'dollar', 'Mes gains']]],
   ['Équipe', [['profiles', 'users', 'Profils'], ['wallet', 'trophy', 'Wallet équipe']]],
-  ['Compte', [['license', 'key', 'Ma licence']]],
+  ['Compte', [['mysettings', 'settings', 'Paramètres'], ['license', 'key', 'Ma licence']]],
 ];
 
 function renderShell(view) {
@@ -747,8 +949,10 @@ async function startNotifications() {
     if (!isAdmin() && nt.for_admin) return;
     S.unread += 1; updateDot(); ringBell();
     toast(nt.title + (nt.body ? ' — ' + nt.body : ''));
+    const pf = prefs();
+    if (pf[notifKind(nt.title)]) playSound();
     try {
-      if (!document.hasFocus() && window.Notification) {
+      if (pf.winNotif && !document.hasFocus() && window.Notification) {
         const w = new Notification(nt.title, { body: nt.body || '' });
         w.onclick = () => { window.focus(); if (nt.order_id) openOrder(nt.order_id); };
       }
@@ -1725,13 +1929,10 @@ async function viewLicenses(main) {
 
 async function viewSettings(main) {
   await loadRefs();
+  if (window.desktop && window.desktop.gpu) { try { S.gpu = await window.desktop.gpu(); } catch (_) { /* rien */ } }
   main.innerHTML = `${head('Paramètres', 'Taux Eldorado, règles de partage, photo et logo')}
-  ${logoCard()}
-  ${bannerCard()}
-  <div class="card"><div class="card-head"><h2>${ic('users')} Photo de profil</h2></div>
-    <div class="avatar-edit">${avatarHtml(myName(), 'lg')}<div><p class="muted small">Toute l'équipe voit ta photo (menu, équipe, chat, wallet).</p>
-    <button class="primary" data-action="avatar">${ic('download')} Changer ma photo</button></div></div></div>
-  
+  ${personalSettingsHtml()}
+  <h2 class="section-title">${ic('settings')} Réglages de l'équipe</h2>
   <div class="grid-2">
     <div class="card"><div class="card-head"><h2>Frais Eldorado</h2></div>
       <p class="muted small">Chaque commande prend le taux en vigueur à sa date. Pour un nouveau taux, ajoute une date d'effet : les anciennes commandes ne changent pas.</p>
@@ -1845,18 +2046,16 @@ async function viewLicense(main) {
     <div class="form-grid">${field('Clé', '<input name="key" class="key-input" required placeholder="BOOST-XXXX-XXXX-XXXX-XXXX">', 'class="field span-2"')}</div>
     <div class="form-actions"><button class="primary" type="submit">Activer</button>
     <span class="muted small">Le temps s'ajoute à ta licence actuelle.</span></div></form>
-  ${logoCard()}
-  ${bannerCard()}
-  <div class="card"><div class="card-head"><h2>${ic('users')} Photo de profil</h2></div>
-    <div class="avatar-edit">${avatarHtml(myName(), 'lg')}<div><p class="muted small">Toute l'équipe voit ta photo (menu, équipe, chat, wallet).</p>
-    <button class="primary" data-action="avatar">${ic('download')} Changer ma photo</button></div></div></div>`;
+  <div class="card"><div class="card-head"><h2>${ic('settings')} Personnaliser l'app</h2></div>
+    <p class="muted small">Logo, bannière de fond, couleurs, sons, profil : tout est dans <b>Paramètres</b>.</p>
+    <div class="form-actions"><button class="primary" data-action="nav" data-view="mysettings">Ouvrir les paramètres</button></div></div>`;
 }
 
 const VIEWS = {
   dashboard: viewDashboard, orders: viewOrders, order: viewOrder, boosters: viewBoosters,
   announcements: viewAnnouncements, wallet: viewWallet, notifs: viewNotifs, payments: viewPayments,
   withdrawals: viewWithdrawals, eldorado: viewEldorado, calc: viewCalc, licenses: viewLicenses, settings: viewSettings,
-  home: viewHome, myorders: viewMyOrders, earnings: viewEarnings, license: viewLicense, profiles: viewProfiles,
+  home: viewHome, myorders: viewMyOrders, earnings: viewEarnings, license: viewLicense, profiles: viewProfiles, mysettings: viewMySettings,
 };
 
 /* =====================================================================
@@ -1869,6 +2068,29 @@ const ACTIONS = {
   nav: (el) => go(el.dataset.view),
   logout: () => logout(),
   avatar: () => openAvatar(),
+  'pref-accent-auto': () => { setPref('accent', ''); applyTheme(S.currentTheme); refresh(); },
+  'sound-test': () => playSound(null, true),
+  'otp-resend': async (el) => {
+    el.disabled = true;
+    try { await sendOtp(); toast('Nouveau code envoyé'); render2FA(); } catch (e) { toast(errMsg(e), 'error'); el.disabled = false; }
+  },
+  '2fa-test': async () => {
+    try { await sendOtp(); } catch (e) { return toast('Envoi impossible : ' + errMsg(e) + ' — vérifie la configuration des emails dans Supabase.', 'error'); }
+    modal(`<form data-form="otp-test"><div class="card-head"><h2>Test de l'A2F</h2><button type="button" class="sm ghost" data-action="close-modal">${ic('x')}</button></div>
+      <p class="muted">Tape le code à 6 chiffres reçu à <b>${esc(S.access.email)}</b>.</p>${otpBoxes()}
+      <div class="form-actions"><button class="primary" type="submit">Vérifier</button></div></form>`, 'small');
+    const first = document.querySelector('#modal input.otp'); if (first) first.focus();
+  },
+  '2fa-on': async () => {
+    if (!S.otpTested) return toast('Fais d\'abord le test.', 'error');
+    if (!confirm('Activer l\'A2F ? À leur prochaine connexion, toi et tes boosters devrez entrer un code reçu par email.')) return;
+    act(run(sb.from('app_settings').update({ require_2fa: true }).eq('id', 1)).then(loadRefs), 'A2F activée');
+  },
+  '2fa-off': async () => {
+    if (!confirm('Désactiver l\'A2F pour toute l\'équipe ?')) return;
+    act(run(sb.from('app_settings').update({ require_2fa: false }).eq('id', 1)).then(loadRefs), 'A2F désactivée');
+  },
+
   profile: (el) => openProfile(el.dataset.name),
   'my-profile': () => openMyProfile(),
   'profile-banner-clear': () => { S.editBanner = null; const b = $('#pedit-banner'); if (b) b.innerHTML = profileBanner({}, 'pbanner'); },
@@ -2011,6 +2233,21 @@ const FORMS = {
     const o = formData(f);
     try { await run(sb.rpc('set_my_payout', { p_method: o.method, p_details: o.details })); toast('Coordonnées enregistrées'); } catch (e) { toast(errMsg(e), 'error'); }
   },
+  otp: async (f) => {
+    const token = otpValue(f);
+    if (!/^\d{6}$/.test(token)) return render2FA('Entre les 6 chiffres du code.');
+    const { error } = await sb.auth.verifyOtp({ email: S.access.email, token, type: 'email' });
+    if (error) return render2FA(/expired|invalid/i.test(error.message || '') ? 'Code incorrect ou expiré. Redemande un code si besoin.' : errMsg(error));
+    S.otpSentAt = null; if (otpTimer) { clearInterval(otpTimer); otpTimer = null; }
+    await loadAccess();
+  },
+  'otp-test': async (f) => {
+    const token = otpValue(f);
+    const { error } = await sb.auth.verifyOtp({ email: S.access.email, token, type: 'email' });
+    if (error) return toast('Code incorrect ou expiré.', 'error');
+    S.otpTested = true; S.otpSentAt = null; closeModal(); toast('Test réussi : tu peux activer l\'A2F');
+    await loadRefs(); refresh();
+  },
   profile: async (f) => {
     const o = formData(f);
     try {
@@ -2109,6 +2346,21 @@ const CHANGES = {
     el.disabled = true;
     try { await window.desktop.setBanner(await fileToDataUrl(file)); await initBanner(); toast('Bannière appliquée'); refresh(); } catch (e) { toast(errMsg(e), 'error'); el.disabled = false; }
   },
+  pref: (el) => {
+    const k = el.dataset.key; const t = el.dataset.type;
+    let v = el.value;
+    if (t === 'bool') v = el.value === '1';
+    if (t === 'num') v = Number(el.value);
+    setPref(k, v);
+    if (k === 'accent') applyTheme(S.currentTheme);
+    if (k === 'bannerColors' || k === 'effects') initBanner();
+    if (k === 'soundKind' || k === 'volume') playSound(null, true);
+    if (['accent', 'bannerColors', 'effects'].includes(k)) refresh();
+  },
+  gpu: (el) => {
+    if (!confirm('L\'app va redémarrer pour appliquer ce réglage. Continuer ?')) { el.value = S.gpu === false ? '0' : '1'; return; }
+    window.desktop.setGpu(el.value === '1');
+  },
   'banner-op': (el) => {
     try { localStorage.setItem('bm_banner_op', el.value); } catch (_) { /* rien */ }
     document.documentElement.style.setProperty('--banner-opacity', el.value);
@@ -2143,11 +2395,33 @@ document.addEventListener('submit', (e) => {
   const f = e.target.closest('form[data-form]');
   if (f && FORMS[f.dataset.form]) { e.preventDefault(); FORMS[f.dataset.form](f, e.submitter); }
 });
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Backspace' && e.target.classList && e.target.classList.contains('otp') && !e.target.value) {
+    const boxes = [...e.target.closest('form').querySelectorAll('input.otp')];
+    const i = boxes.indexOf(e.target); if (boxes[i - 1]) { boxes[i - 1].focus(); boxes[i - 1].value = ''; }
+  }
+});
 document.addEventListener('change', (e) => {
   const el = e.target.closest('[data-change]');
   if (el && CHANGES[el.dataset.change]) CHANGES[el.dataset.change](el);
 });
 document.addEventListener('input', (e) => {
+  if (e.target.classList && e.target.classList.contains('otp')) {
+    const form = e.target.closest('form');
+    const boxes = [...form.querySelectorAll('input.otp')];
+    const digits = e.target.value.replace(/\D/g, '');
+    if (digits.length > 1 && (e.inputType === 'insertFromPaste' || digits.length >= 6)) { // code collé en entier
+      boxes.forEach((b, i) => { b.value = digits[i] || ''; });
+      boxes[Math.min(digits.length, 6) - 1].focus();
+    } else {
+      e.target.value = digits.slice(-1);
+      const i = boxes.indexOf(e.target);
+      if (e.target.value && boxes[i + 1]) boxes[i + 1].focus();
+    }
+    if (otpValue(form).length === 6) form.requestSubmit();
+    return;
+  }
+
   const f = e.target.closest('form[data-form="order"], form[data-form="assign"]');
   if (f) updateSplitForm(f, f.querySelector('.preview'));
   if (e.target.closest('form[data-form="calc-a"], form[data-form="calc-b"]')) updateCalc();

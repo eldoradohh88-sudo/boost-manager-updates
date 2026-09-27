@@ -5,6 +5,13 @@ const path = require('path');
 // on garde le même dossier de données qu'avant le changement de nom : personne n'a à se reconnecter
 app.setPath('userData', path.join(app.getPath('appData'), 'Boost Manager'));
 
+// réglages lus avant le démarrage (ex. accélération graphique coupée pour les PC qui rament)
+const fs0 = require('fs');
+const bootPrefsPath = () => path.join(app.getPath('userData'), 'boot-prefs.json');
+let bootPrefs = {};
+try { bootPrefs = JSON.parse(fs0.readFileSync(bootPrefsPath(), 'utf8')) || {}; } catch (_) { bootPrefs = {}; }
+if (bootPrefs.gpu === false) app.disableHardwareAcceleration();
+
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 }
@@ -88,6 +95,17 @@ function setupUpdater() {
   ipcMain.handle('updater-install', () => autoUpdater.quitAndInstall(false, true));
 }
 ipcMain.handle('app-version', () => app.getVersion());
+ipcMain.handle('set-zoom', (_e, f) => {
+  const z = Math.min(1.4, Math.max(0.75, Number(f) || 1));
+  if (win && !win.isDestroyed()) win.webContents.setZoomFactor(z);
+  return z;
+});
+ipcMain.handle('gpu-get', () => bootPrefs.gpu !== false);
+ipcMain.handle('gpu-set', (_e, on) => {
+  bootPrefs.gpu = !!on;
+  try { fs0.mkdirSync(app.getPath('userData'), { recursive: true }); fs0.writeFileSync(bootPrefsPath(), JSON.stringify(bootPrefs)); } catch (_) { /* rien */ }
+  app.relaunch(); app.exit(0);
+});
 
 // couleurs de l'app tirées automatiquement de src/logo.png
 let themeCache;
