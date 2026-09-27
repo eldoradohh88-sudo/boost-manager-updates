@@ -9,6 +9,9 @@ contextBridge.exposeInMainWorld('desktop', {
   logo: () => ipcRenderer.invoke('logo-get'),
   setLogo: (dataUrl) => ipcRenderer.invoke('logo-set', dataUrl),
   resetLogo: () => ipcRenderer.invoke('logo-reset'),
+  banner: () => ipcRenderer.invoke('banner-get'),
+  setBanner: (dataUrl) => ipcRenderer.invoke('banner-set', dataUrl),
+  resetBanner: () => ipcRenderer.invoke('banner-reset'),
   eldoradoOpen: () => ipcRenderer.invoke('eldorado-open'),
   openUrl: (url) => ipcRenderer.invoke('open-url', url),
 });

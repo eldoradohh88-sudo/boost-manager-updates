@@ -52,6 +52,32 @@ body::after { background: var(--accent-b-soft); bottom: -30vmax; left: -20vmax; 
 @keyframes drift-b { to { transform: translate(14vmax, -8vmax) scale(1.1); } }
 #app, .toast, .modal-bg, .update-bar { position: relative; z-index: 2; }
 
+/* bannière de fond (image ou GIF choisi par l'utilisateur) */
+#banner-bg { position: fixed; inset: 0; z-index: 1; pointer-events: none; display: none; }
+#banner-bg img { width: 100%; height: 100%; object-fit: cover; opacity: var(--banner-opacity, .4); }
+#banner-bg::after { content: ""; position: absolute; inset: 0;
+  background: linear-gradient(180deg, hsl(0 0% 0% / .15), var(--bg-1) 95%), radial-gradient(ellipse at center, transparent 30%, var(--bg-1) 110%); }
+body.has-banner #banner-bg { display: block; }
+body.has-banner::before, body.has-banner::after { opacity: .5; }
+.banner-preview { width: 260px; height: 110px; border-radius: 12px; object-fit: cover; border: 1px solid var(--line-2); background: var(--field); }
+
+/* les couleurs du thème glissent en douceur quand la bannière animée change de couleur */
+@property --bg-1 { syntax: '<color>'; inherits: true; initial-value: hsl(215 22% 8%); }
+@property --bg-2 { syntax: '<color>'; inherits: true; initial-value: hsl(215 22% 13%); }
+@property --panel { syntax: '<color>'; inherits: true; initial-value: hsl(215 22% 15% / .86); }
+@property --panel-2 { syntax: '<color>'; inherits: true; initial-value: hsl(215 22% 20% / .75); }
+@property --line { syntax: '<color>'; inherits: true; initial-value: hsl(215 30% 75% / .13); }
+@property --accent { syntax: '<color>'; inherits: true; initial-value: hsl(212 80% 62%); }
+@property --accent-2 { syntax: '<color>'; inherits: true; initial-value: hsl(212 80% 76%); }
+@property --accent-soft { syntax: '<color>'; inherits: true; initial-value: hsl(212 80% 62% / .14); }
+@property --accent-line { syntax: '<color>'; inherits: true; initial-value: hsl(212 80% 62% / .45); }
+@property --accent-glow { syntax: '<color>'; inherits: true; initial-value: hsl(212 80% 62% / .32); }
+@property --accent-b { syntax: '<color>'; inherits: true; initial-value: hsl(45 75% 62%); }
+@property --accent-b-soft { syntax: '<color>'; inherits: true; initial-value: hsl(45 75% 62% / .16); }
+:root { transition: --bg-1 1.6s ease, --bg-2 1.6s ease, --panel 1.6s ease, --panel-2 1.6s ease, --line 1.6s ease,
+  --accent 1.6s ease, --accent-2 1.6s ease, --accent-soft 1.6s ease, --accent-line 1.6s ease, --accent-glow 1.6s ease,
+  --accent-b 1.6s ease, --accent-b-soft 1.6s ease; }
+
 h1, h2, h3 { margin: 0; font-family: var(--font-title); }
 h1 { font-size: 28px; font-weight: 700; letter-spacing: -.02em; }
 h2 { font-size: 17px; font-weight: 650; letter-spacing: -.01em; }

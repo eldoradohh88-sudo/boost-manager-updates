@@ -158,6 +158,7 @@ async function initTheme() {
   try { const l = await window.desktop.logo(); S.logoUrl = l.url; S.customLogo = l.custom; } catch (_) { /* logo par défaut */ }
   try {
     const vars = await window.desktop.theme();
+    S.baseTheme = vars;
     if (vars) { applyTheme(vars); try { localStorage.setItem('bm_theme', JSON.stringify(vars)); } catch (_) { /* rien */ } }
     else { try { localStorage.removeItem('bm_theme'); } catch (_) { /* rien */ } }
   } catch (_) { /* thème par défaut */ }
@@ -192,9 +193,102 @@ function logoToPng(file) {
 }
 function logoApplied(r) {
   S.logoUrl = r.url; S.customLogo = r.custom;
-  applyTheme(r.theme);
+  S.baseTheme = r.theme;
+  if (!S.bannerUrl) applyTheme(r.theme);
   try { if (r.theme) localStorage.setItem('bm_theme', JSON.stringify(r.theme)); else localStorage.removeItem('bm_theme'); } catch (_) { /* rien */ }
   document.querySelectorAll('img.logo').forEach((el) => { el.src = logoSrc(); });
+}
+
+/* ---------------- bannière de fond (image ou GIF) + couleurs qui la suivent ---------------- */
+let bannerTimer = null;
+let lastBannerPalette = '';
+function bannerOpacity() { try { return localStorage.getItem('bm_banner_op') || '.4'; } catch (_) { return '.4'; } }
+function stopBannerColors() { if (bannerTimer) clearInterval(bannerTimer); bannerTimer = null; lastBannerPalette = ''; }
+function applyBannerPalette(pal) {
+  if (!pal) return; // image en noir et blanc à cet instant : on garde les couleurs actuelles
+  const key = JSON.stringify(pal);
+  if (key === lastBannerPalette) return;
+  lastBannerPalette = key;
+  applyTheme(pal);
+}
+function paletteOf(source, ctx) {
+  ctx.clearRect(0, 0, 48, 48);
+  ctx.drawImage(source, 0, 0, 48, 48);
+  return window.BMTheme.paletteFromBitmap(ctx.getImageData(0, 0, 48, 48).data, 48, 48, true);
+}
+// lit chaque image du GIF et calcule ses couleurs, avec le moment où elle apparaît
+async function bannerTimeline(url, ctx) {
+  if (typeof ImageDecoder === 'undefined') return null;
+  const m = url.match(/^data:([^;]+);base64,/);
+  if (!m) return null;
+  const bin = atob(url.slice(m[0].length));
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  const dec = new ImageDecoder({ data: bytes, type: m[1] });
+  try {
+    await dec.tracks.ready;
+    const count = Math.min(dec.tracks.selectedTrack ? dec.tracks.selectedTrack.frameCount : 1, 400);
+    const every = Math.max(1, Math.ceil(count / 60)); // au plus ~60 relevés de couleur
+    const steps = []; let t = 0;
+    for (let i = 0; i < count; i++) {
+      const { image } = await dec.decode({ frameIndex: i });
+      const d = image.duration ? image.duration / 1000 : 100; // en ms
+      if (i % every === 0) steps.push({ at: t, pal: paletteOf(image, ctx) });
+      image.close();
+      t += Math.max(d, 20);
+    }
+    return { steps, total: t };
+  } finally { dec.close(); }
+}
+async function initBanner() {
+  stopBannerColors();
+  const box = document.getElementById('banner-bg');
+  if (!box || !window.desktop || !window.desktop.banner) return;
+  let url = null;
+  try { url = await window.desktop.banner(); } catch (_) { /* pas de bannière */ }
+  S.bannerUrl = url;
+  document.documentElement.style.setProperty('--banner-opacity', bannerOpacity());
+  const img = box.querySelector('img');
+  if (!url) { img.removeAttribute('src'); document.body.classList.remove('has-banner'); applyTheme(S.baseTheme); return; }
+  document.body.classList.add('has-banner');
+  const c = document.createElement('canvas'); c.width = 48; c.height = 48;
+  const ctx = c.getContext('2d', { willReadFrequently: true });
+  await new Promise((res) => { img.onload = res; img.onerror = res; img.src = url; });
+  const start = performance.now();
+  let tl = null;
+  try { tl = await bannerTimeline(url, ctx); } catch (_) { tl = null; }
+  if (!tl || tl.steps.length <= 1) { // image fixe (ou décodeur absent) : une seule couleur
+    try { applyBannerPalette(tl && tl.steps[0] ? tl.steps[0].pal : paletteOf(img, ctx)); } catch (_) { /* rien */ }
+    return;
+  }
+  // GIF animé : les couleurs de l'app suivent l'animation
+  const tick = () => {
+    if (document.hidden) return;
+    const t = (performance.now() - start) % tl.total;
+    let cur = tl.steps[0];
+    for (const st of tl.steps) { if (st.at <= t) cur = st; else break; }
+    applyBannerPalette(cur.pal);
+  };
+  tick();
+  bannerTimer = setInterval(tick, 250);
+}
+function bannerCard() {
+  if (!window.desktop || !window.desktop.setBanner) return '';
+  const op = bannerOpacity();
+  return `<div class="card"><div class="card-head"><h2>${ic('sparkles')} Bannière de fond</h2></div>
+    <div class="avatar-edit">${S.bannerUrl ? `<img class="banner-preview" src="${S.bannerUrl}" alt="">` : '<div class="banner-preview"></div>'}
+      <div><p class="muted small">Une image ou un <b>GIF animé</b> en fond de l'app. Les couleurs de l'app suivent la bannière et changent en même temps qu'elle. Seulement chez toi.</p>
+      <label class="btn primary">${ic('download')} Choisir une bannière<input type="file" accept="image/gif,image/png,image/jpeg,image/webp" data-change="banner-file" hidden></label>
+      ${S.bannerUrl ? '<button class="ghost" data-action="banner-reset">Retirer la bannière</button>' : ''}
+      ${S.bannerUrl ? `<div class="form-grid" style="margin-top:10px">${field('Visibilité', `<select data-change="banner-op">${opt('.25', 'Discrète', op === '.25')}${opt('.4', 'Normale', op === '.4')}${opt('.6', 'Forte', op === '.6')}${opt('.85', 'Maximum', op === '.85')}</select>`)}</div>` : ''}</div></div></div>`;
+}
+function fileToDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result);
+    r.onerror = () => reject(new Error('Fichier illisible.'));
+    r.readAsDataURL(file);
+  });
 }
 
 /* ---------------- photos de profil ---------------- */
@@ -212,7 +306,7 @@ async function loadAvatars() {
 function openAvatar() {
   modal(`<div class="card-head"><h2>${ic('users')} Ma photo de profil</h2></div>
     <div class="avatar-edit">${avatarHtml(myName(), 'lg')}
-      <div><p class="muted small">Choisis une image (JPG, PNG, WEBP). Elle est recadrée en carré automatiquement. Toute l'équipe la verra.</p>
+      <div><p class="muted small">Choisis une image (JPG, PNG, WEBP) ou un <b>GIF animé</b> (8 Mo max). Elle est recadrée en carré automatiquement. Toute l'équipe la verra.</p>
       <label class="btn primary">${ic('download')} Choisir une image<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" data-change="avatar-file" hidden></label>
       ${avatarUrl(myName()) ? '<button class="ghost" data-action="avatar-remove">Retirer ma photo</button>' : ''}</div></div>
     <div class="form-actions"><button data-action="close-modal">Fermer</button></div>`, 'small');
@@ -237,10 +331,13 @@ function cropToJpeg(file) {
   });
 }
 async function uploadAvatar(file) {
-  const blob = await cropToJpeg(file);
+  // GIF animé : envoyé tel quel pour garder l'animation (recadré à l'affichage). Sinon : carré 256 px en JPG.
+  const gif = file && file.type === 'image/gif';
+  if (gif && file.size > 8 * 1024 * 1024) throw new Error('GIF trop lourd (8 Mo max). Réduis-le sur ezgif.com par exemple.');
+  const blob = gif ? file : await cropToJpeg(file);
   if (!S.uid) { const { data } = await sb.auth.getUser(); S.uid = data && data.user && data.user.id; }
-  const path = `${S.uid}/${Date.now()}.jpg`;
-  const { error } = await sb.storage.from('avatars').upload(path, blob, { contentType: 'image/jpeg', upsert: false });
+  const path = `${S.uid}/${Date.now()}.${gif ? 'gif' : 'jpg'}`;
+  const { error } = await sb.storage.from('avatars').upload(path, blob, { contentType: gif ? 'image/gif' : 'image/jpeg', upsert: false });
   if (error) throw error;
   const { data } = sb.storage.from('avatars').getPublicUrl(path);
   await run(sb.rpc('set_my_avatar', { p_url: data.publicUrl }));
@@ -307,6 +404,7 @@ function initUpdater() {
 async function boot() {
   initUpdater();
   await initTheme();
+  await initBanner();
   if (!window.supabase || !CFG.SUPABASE_URL || /COLLE/.test(CFG.SUPABASE_URL + CFG.SUPABASE_ANON_KEY)) {
     $('#app').innerHTML = `<div class="center-screen"><div class="auth-card">
       <div class="brand"><img class="logo" src="${logoSrc()}" alt="Flowey's Software Manager"><h1>Configuration requise</h1></div>
@@ -1518,6 +1616,7 @@ async function viewSettings(main) {
   await loadRefs();
   main.innerHTML = `${head('Paramètres', 'Taux Eldorado, règles de partage, photo et logo')}
   ${logoCard()}
+  ${bannerCard()}
   <div class="card"><div class="card-head"><h2>${ic('users')} Photo de profil</h2></div>
     <div class="avatar-edit">${avatarHtml(myName(), 'lg')}<div><p class="muted small">Toute l'équipe voit ta photo (menu, équipe, chat, wallet).</p>
     <button class="primary" data-action="avatar">${ic('download')} Changer ma photo</button></div></div></div>
@@ -1636,6 +1735,7 @@ async function viewLicense(main) {
     <div class="form-actions"><button class="primary" type="submit">Activer</button>
     <span class="muted small">Le temps s'ajoute à ta licence actuelle.</span></div></form>
   ${logoCard()}
+  ${bannerCard()}
   <div class="card"><div class="card-head"><h2>${ic('users')} Photo de profil</h2></div>
     <div class="avatar-edit">${avatarHtml(myName(), 'lg')}<div><p class="muted small">Toute l'équipe voit ta photo (menu, équipe, chat, wallet).</p>
     <button class="primary" data-action="avatar">${ic('download')} Changer ma photo</button></div></div></div>`;
@@ -1658,6 +1758,7 @@ const ACTIONS = {
   nav: (el) => go(el.dataset.view),
   logout: () => logout(),
   avatar: () => openAvatar(),
+  'banner-reset': async () => { try { await window.desktop.resetBanner(); await initBanner(); toast('Bannière retirée'); refresh(); } catch (e) { toast(errMsg(e), 'error'); } },
   'logo-reset': async () => { try { logoApplied(await window.desktop.resetLogo()); toast('Logo de base remis'); refresh(); } catch (e) { toast(errMsg(e), 'error'); } },
   'avatar-remove': async () => {
     try { await run(sb.rpc('set_my_avatar', { p_url: null })); await loadAvatars(); refreshMyAvatar(); closeModal(); toast('Photo retirée'); if (S.view === 'settings' || S.view === 'license') refresh(); } catch (e) { toast(errMsg(e), 'error'); }
@@ -1866,6 +1967,17 @@ const CHANGES = {
     if (!f || !url || f.elements.ref.value) return;
     const m = url.replace(/[?#].*$/, '').match(/([A-Za-z0-9_-]{5,})\/?$/);
     if (m) f.elements.ref.value = m[1];
+  },
+  'banner-file': async (el) => {
+    const file = el.files && el.files[0];
+    if (!file) return;
+    if (file.size > 30 * 1024 * 1024) { toast('Bannière trop lourde (30 Mo max).', 'error'); return; }
+    el.disabled = true;
+    try { await window.desktop.setBanner(await fileToDataUrl(file)); await initBanner(); toast('Bannière appliquée'); refresh(); } catch (e) { toast(errMsg(e), 'error'); el.disabled = false; }
+  },
+  'banner-op': (el) => {
+    try { localStorage.setItem('bm_banner_op', el.value); } catch (_) { /* rien */ }
+    document.documentElement.style.setProperty('--banner-opacity', el.value);
   },
   'logo-file': async (el) => {
     const file = el.files && el.files[0];

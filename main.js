@@ -131,6 +131,39 @@ ipcMain.handle('logo-reset', () => {
   return logoChanged();
 });
 
+// bannière de fond personnelle (image ou GIF animé), gardée sur ce PC
+const BANNER_TYPES = { 'image/gif': 'gif', 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp' };
+const bannerFile = () => {
+  for (const ext of Object.values(BANNER_TYPES)) {
+    const f = path.join(app.getPath('userData'), 'banner.' + ext);
+    if (fs.existsSync(f)) return { f, ext };
+  }
+  return null;
+};
+ipcMain.handle('banner-get', () => {
+  try {
+    const b = bannerFile();
+    if (!b) return null;
+    const mime = Object.keys(BANNER_TYPES).find((m) => BANNER_TYPES[m] === b.ext);
+    return `data:${mime};base64,${fs.readFileSync(b.f).toString('base64')}`;
+  } catch (_) { return null; }
+});
+ipcMain.handle('banner-set', (_e, dataUrl) => {
+  const m = typeof dataUrl === 'string' && dataUrl.match(/^data:(image\/(?:gif|png|jpeg|webp));base64,/);
+  if (!m) throw new Error('Format non pris en charge (GIF, PNG, JPG ou WEBP)');
+  if (dataUrl.length > 40 * 1024 * 1024) throw new Error('Bannière trop lourde (30 Mo max)');
+  const old = bannerFile();
+  if (old) fs.unlinkSync(old.f);
+  fs.mkdirSync(app.getPath('userData'), { recursive: true });
+  fs.writeFileSync(path.join(app.getPath('userData'), 'banner.' + BANNER_TYPES[m[1]]), Buffer.from(dataUrl.slice(m[0].length), 'base64'));
+  return true;
+});
+ipcMain.handle('banner-reset', () => {
+  const old = bannerFile();
+  if (old) fs.unlinkSync(old.f);
+  return true;
+});
+
 /* ---------------- Eldorado (espace admin) ----------------
    Ouvre eldorado.gg dans ton navigateur habituel : la vérification anti-robot y passe normalement,
    et ta connexion reste celle de ton navigateur. */

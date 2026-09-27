@@ -1,7 +1,7 @@
 {
   "name": "boost-manager",
   "productName": "Flowey's Software Manager",
-  "version": "2.7.1",
+  "version": "2.8.0",
   "description": "Gestion des commandes de boosting Eldorado, des boosters et des licences",
   "author": "Flowey",
   "main": "main.js",

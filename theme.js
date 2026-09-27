@@ -45,12 +45,13 @@ function peak(hist, exclude = [], minGap = 0) {
  * @param {number} height
  * @returns {object|null} variables CSS
  */
-function paletteFromBitmap(bgra, width, height) {
+function paletteFromBitmap(bgra, width, height, rgba = false) {
   const tone = Array.from({ length: 36 }, () => ({ w: 0, n: 0, x: 0, y: 0, s: 0, l: 0 }));
   const vivid = Array.from({ length: 36 }, () => ({ w: 0, n: 0, x: 0, y: 0, s: 0, l: 0 }));
   let count = 0; let sumS = 0;
   for (let i = 0; i + 3 < bgra.length && i < width * height * 4; i += 4) {
-    const b = bgra[i]; const g = bgra[i + 1]; const r = bgra[i + 2]; const a = bgra[i + 3];
+    const g = bgra[i + 1]; const a = bgra[i + 3];
+    const r = rgba ? bgra[i] : bgra[i + 2]; const b = rgba ? bgra[i + 2] : bgra[i];
     if (a < 180) continue;
     const [h, s, l] = rgbToHsl(r, g, b);
     count++; sumS += s;
@@ -99,4 +100,5 @@ function paletteFromBitmap(bgra, width, height) {
   };
 }
 
-module.exports = { paletteFromBitmap, rgbToHsl };
+if (typeof module !== 'undefined' && module.exports) module.exports = { paletteFromBitmap, rgbToHsl };
+else if (typeof window !== 'undefined') window.BMTheme = { paletteFromBitmap };
