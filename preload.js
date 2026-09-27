@@ -6,6 +6,8 @@ contextBridge.exposeInMainWorld('desktop', {
   installUpdate: () => ipcRenderer.invoke('updater-install'),
   version: () => ipcRenderer.invoke('app-version'),
   crashLog: () => ipcRenderer.invoke('crash-log'),
+  bootFlags: () => ipcRenderer.invoke('boot-flags'),
+  safeOff: () => ipcRenderer.invoke('safe-off'),
   download: (url) => ipcRenderer.invoke('download-url', url),
   setZoom: (f) => ipcRenderer.invoke('set-zoom', f),
   gpu: () => ipcRenderer.invoke('gpu-get'),

@@ -189,7 +189,9 @@ const PREF_DEFAULTS = {
 function prefs() {
   let p = {};
   try { p = JSON.parse(localStorage.getItem('bm_prefs') || '{}') || {}; } catch (_) { p = {}; }
-  return { ...PREF_DEFAULTS, ...p };
+  const r = { ...PREF_DEFAULTS, ...p };
+  if (S.safeMode) { r.effects = false; r.anim = false; r.bannerColors = false; } // mode léger après un plantage
+  return r;
 }
 function setPref(k, v) {
   const p = prefs(); p[k] = v;
@@ -272,7 +274,11 @@ function onOff(key, label, help = '') {
 function personalSettingsHtml() {
   const p = prefs();
   const accent = /^#[0-9a-f]{6}$/i.test(p.accent || '') ? p.accent : '';
-  return `<h2 class="section-title">${ic('sparkles')} Mes réglages <span class="muted small">— seulement sur ce PC</span></h2>
+  const boot = S.boot || {};
+  return `${S.safeMode ? `<div class="warn-box" style="margin-bottom:14px"><b>Mode léger activé</b> : l'app a planté sur ce PC, donc la bannière et les effets sont coupés pour la garder stable.
+      <div class="form-actions" style="margin-top:8px"><button class="sm" data-action="safe-off">Revenir au mode normal</button></div></div>` : ''}
+  ${boot.gpuAuto && !boot.gpu ? `<div class="warn-box" style="margin-bottom:14px">La carte graphique de ce PC faisait planter l'app : l'<b>accélération graphique</b> a été coupée automatiquement. Tu peux la réactiver plus bas si tu veux réessayer.</div>` : ''}
+  <h2 class="section-title">${ic('sparkles')} Mes réglages <span class="muted small">— seulement sur ce PC</span></h2>
   <div class="grid-2">
     <div class="card"><div class="card-head"><h2>Apparence</h2></div>
       <div class="form-grid">
@@ -1048,9 +1054,10 @@ async function checkLastCrash() {
 /* ---------------- démarrage ---------------- */
 async function boot() {
   initUpdater();
+  if (window.desktop && window.desktop.bootFlags) { try { S.boot = await window.desktop.bootFlags(); S.safeMode = !!S.boot.safe; } catch (_) { /* rien */ } }
   applyPrefs();
   await initTheme();
-  await initBanner();
+  if (!S.safeMode) await initBanner();
   if (!window.supabase || !CFG.SUPABASE_URL || /COLLE/.test(CFG.SUPABASE_URL + CFG.SUPABASE_ANON_KEY)) {
     $('#app').innerHTML = `<div class="center-screen"><div class="auth-card">
       <div class="brand"><img class="logo" src="${logoSrc()}" alt="Flowey's Software Manager"><h1>Configuration requise</h1></div>
@@ -2454,6 +2461,10 @@ const ACTIONS = {
       <button data-action="close-modal">Fermer</button></div></div>`);
   },
   'chat-with': (el) => { S.chatChannel = dmChannel(myKey(), el.dataset.key); go('chat'); },
+  'safe-off': async () => {
+    if (!confirm('Revenir au mode normal (bannière et effets) ? Si l\'app replante, le mode léger se réactivera tout seul.')) return;
+    await window.desktop.safeOff(); S.safeMode = false; applyPrefs(); await initBanner(); refresh();
+  },
   'pref-accent-auto': () => { setPref('accent', ''); applyTheme(S.currentTheme); refresh(); },
   'sound-test': () => playSound(null, true),
   'otp-resend': async (el) => {

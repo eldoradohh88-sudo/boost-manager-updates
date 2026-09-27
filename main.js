@@ -11,6 +11,9 @@ const bootPrefsPath = () => path.join(app.getPath('userData'), 'boot-prefs.json'
 let bootPrefs = {};
 try { bootPrefs = JSON.parse(fs0.readFileSync(bootPrefsPath(), 'utf8')) || {}; } catch (_) { bootPrefs = {}; }
 if (bootPrefs.gpu === false) app.disableHardwareAcceleration();
+function saveBootPrefs() {
+  try { fs0.mkdirSync(app.getPath('userData'), { recursive: true }); fs0.writeFileSync(bootPrefsPath(), JSON.stringify(bootPrefs)); } catch (_) { /* rien */ }
+}
 
 // une seule fenêtre de l'app à la fois (une 2e ouverture remet la 1re au premier plan)
 const gotLock = app.requestSingleInstanceLock();
@@ -26,7 +29,16 @@ function logCrash(kind, detail) {
 }
 process.on('uncaughtException', (e) => logCrash('main', e)); // l'app ne se ferme plus sur une erreur imprévue
 process.on('unhandledRejection', (e) => logCrash('main-promise', e));
-app.on('child-process-gone', (_e, d) => { if (d && d.reason !== 'clean-exit') logCrash('process-' + d.type, d); });
+// Si le moteur graphique (carte graphique) plante, Chrome finit par fermer l'app d'un coup.
+// Dès le 1er plantage, on redémarre l'app sans accélération graphique : elle reste stable sur ce PC.
+app.on('child-process-gone', (_e, d) => {
+  if (!d || d.reason === 'clean-exit') return;
+  logCrash('process-' + d.type, d);
+  if (d.type === 'GPU' && bootPrefs.gpu !== false) {
+    bootPrefs.gpu = false; bootPrefs.gpuAuto = true; saveBootPrefs();
+    app.relaunch(); app.exit(0);
+  }
+});
 
 const fs = require('fs');
 let win;
@@ -80,13 +92,19 @@ function createWindow() {
     if (!url.startsWith('file://')) e.preventDefault();
   });
   win.webContents.once('did-finish-load', setupUpdater);
-  // si l'affichage plante, on le recharge au lieu de laisser une fenêtre vide
+  // si l'affichage plante : on recharge ; s'il replante vite, on passe en « mode léger » (sans bannière ni effets)
+  let crashes = [];
   win.webContents.on('render-process-gone', (_e, d) => {
     logCrash('fenetre', d);
-    if (d && d.reason !== 'clean-exit' && win && !win.isDestroyed()) setTimeout(() => { try { win.reload(); } catch (_) { /* rien */ } }, 800);
+    if (!d || d.reason === 'clean-exit' || !win || win.isDestroyed()) return;
+    crashes = crashes.filter((t) => Date.now() - t < 60000).concat(Date.now());
+    if (crashes.length >= 2 && !bootPrefs.safe) { bootPrefs.safe = true; saveBootPrefs(); }
+    setTimeout(() => { try { win.reload(); } catch (_) { /* rien */ } }, 800);
   });
   win.on('unresponsive', () => logCrash('fenetre', 'ne répond plus'));
 }
+ipcMain.handle('boot-flags', () => ({ safe: !!bootPrefs.safe, gpuAuto: !!bootPrefs.gpuAuto, gpu: bootPrefs.gpu !== false }));
+ipcMain.handle('safe-off', () => { bootPrefs.safe = false; saveBootPrefs(); return true; });
 ipcMain.handle('crash-log', () => {
   try {
     const txt = fs0.readFileSync(crashLogPath(), 'utf8');
@@ -116,7 +134,7 @@ function setupUpdater() {
   autoUpdater.on('update-downloaded', (info) => {
     // mise à jour prête dans les 2 premières minutes : on redémarre tout de suite, proprement
     // (sinon l'installation se ferait en fond à la fermeture et couperait l'app si on la rouvre trop vite)
-    if (Date.now() - startedAt < 120000) {
+    if (Date.now() - startedAt < 45000 && !bootPrefs.safe) {
       send({ state: 'installing', version: info.version });
       setTimeout(() => { try { autoUpdater.quitAndInstall(true, true); } catch (e) { logCrash('maj', e); } }, 4000);
     } else {
