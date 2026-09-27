@@ -131,21 +131,14 @@ function setupUpdater() {
   let version = null;
   autoUpdater.on('update-available', (info) => { version = info.version; send({ state: 'downloading', version, percent: 0 }); });
   autoUpdater.on('download-progress', (p) => send({ state: 'downloading', version, percent: Math.round(p.percent || 0) }));
-  autoUpdater.on('update-downloaded', (info) => {
-    // mise à jour prête dans les 2 premières minutes : on redémarre tout de suite, proprement
-    // (sinon l'installation se ferait en fond à la fermeture et couperait l'app si on la rouvre trop vite)
-    if (Date.now() - startedAt < 45000 && !bootPrefs.safe) {
-      send({ state: 'installing', version: info.version });
-      setTimeout(() => { try { autoUpdater.quitAndInstall(true, true); } catch (e) { logCrash('maj', e); } }, 4000);
-    } else {
-      send({ state: 'ready', version: info.version });
-    }
-  });
+  // la mise à jour ne ferme JAMAIS l'app d'elle-même : message « Mettre à jour » dans l'app,
+  // sinon installation discrète à la prochaine fermeture
+  autoUpdater.on('update-downloaded', (info) => send({ state: 'ready', version: info.version }));
   autoUpdater.on('error', (err) => console.error('Mise à jour :', err && err.message));
   const check = () => autoUpdater.checkForUpdates().catch(() => { /* hors ligne ou pas encore configuré */ });
   check();
   setInterval(check, 60 * 60 * 1000); // revérifie toutes les heures
-  ipcMain.handle('updater-install', () => autoUpdater.quitAndInstall(false, true));
+  ipcMain.handle('updater-install', () => autoUpdater.quitAndInstall(true, true));
 }
 ipcMain.handle('app-version', () => app.getVersion());
 // téléchargement d'une pièce jointe (Windows demande où l'enregistrer)
