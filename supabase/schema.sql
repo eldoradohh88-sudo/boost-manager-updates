@@ -1190,6 +1190,23 @@ begin
 end $$;
 
 -- ---------------------------------------------------------------------
+-- NOUVEAUTÉS (v3.6) : notes de mise à jour publiées par Flowey
+-- ---------------------------------------------------------------------
+create table if not exists public.update_notes (
+  id         bigserial primary key,
+  created_at timestamptz not null default now(),
+  version    text check (length(version) <= 20),
+  kind       text not null default 'new' check (kind in ('new','fix','better')),
+  title      text not null check (length(trim(title)) > 0 and length(title) <= 120),
+  body       text check (length(body) <= 2000)
+);
+alter table public.update_notes enable row level security;
+drop policy if exists admin_all on public.update_notes;
+create policy admin_all on public.update_notes for all using (public.is_admin()) with check (public.is_admin());
+drop policy if exists team_read on public.update_notes;
+create policy team_read on public.update_notes for select using (public.has_access());
+
+-- ---------------------------------------------------------------------
 -- DROITS : toutes les fonctions de l'app utilisables par les comptes connectés
 -- (chaque fonction vérifie elle-même la licence / le rôle admin)
 -- ---------------------------------------------------------------------

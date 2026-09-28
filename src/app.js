@@ -121,6 +121,7 @@ const ICONS = {
   megaphone: '<path d="M3 11v3a1 1 0 0 0 1 1h2l5 4V6L6 10H4a1 1 0 0 0-1 1z"/><path d="M15 8.5a5 5 0 0 1 0 7"/><path d="M18 5.5a9 9 0 0 1 0 13"/>',
   trophy: '<path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3"/>',
   send: '<path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4z"/>',
+  book: '<path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H20v17H6.5A2.5 2.5 0 0 0 4 21.5z"/><path d="M4 21.5A2.5 2.5 0 0 1 6.5 19H20v3H6.5"/><path d="M8 7h8M8 11h6"/>',
   clip: '<path d="m21 11-8.5 8.5a5.5 5.5 0 0 1-7.8-7.8l9-9a3.7 3.7 0 0 1 5.2 5.2l-9 9a1.8 1.8 0 0 1-2.6-2.6l8.3-8.3"/>',
   smile: '<circle cx="12" cy="12" r="9"/><path d="M8.5 14.5a4.5 4.5 0 0 0 7 0"/><path d="M9 9.5h.01M15 9.5h.01"/>',
   mic: '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3"/>',
@@ -178,6 +179,218 @@ async function initTheme() {
     if (vars) { applyTheme(vars); try { localStorage.setItem('bm_theme', JSON.stringify(vars)); } catch (_) { /* rien */ } }
     else { try { localStorage.removeItem('bm_theme'); } catch (_) { /* rien */ } }
   } catch (_) { /* thème par défaut */ }
+}
+
+/* =====================================================================
+   LANGUE : français / anglais (drapeaux dans le menu)
+   ===================================================================== */
+let LANG = 'fr';
+try { LANG = localStorage.getItem('bm_lang') === 'en' ? 'en' : 'fr'; } catch (_) { /* rien */ }
+const EN = () => LANG === 'en';
+const L = (fr, en) => (EN() ? en : fr); // texte selon la langue (pour les textes longs écrits dans les deux langues)
+// contenus écrits par l'équipe (messages, bios, annonces…) : jamais traduits
+const NO_I18N = '[data-noi18n], textarea, script, style, .txt, .pbio, .ann .b, .ann .h, .tchat-who, .who-cell, .pname, .ptag, .chip, code';
+function trText(t) {
+  const k = t.trim();
+  if (!k || !window.I18N_EN) return null;
+  const d = window.I18N_EN[k];
+  if (d) return t.replace(k, d);
+  for (const [re, rep] of window.I18N_EN_RULES || []) { if (re.test(k)) return t.replace(k, k.replace(re, rep)); }
+  return null;
+}
+function translateTree(root) {
+  if (!EN() || !root) return;
+  if (root.nodeType === 3) {
+    if (root.parentElement && !root.parentElement.closest(NO_I18N)) { const r = trText(root.nodeValue); if (r !== null && r !== root.nodeValue) root.nodeValue = r; }
+    return;
+  }
+  if (root.nodeType !== 1 || root.closest(NO_I18N)) return;
+  const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  let nd;
+  while ((nd = w.nextNode())) {
+    if (nd.parentElement && nd.parentElement.closest(NO_I18N)) continue;
+    const r = trText(nd.nodeValue);
+    if (r !== null && r !== nd.nodeValue) nd.nodeValue = r;
+  }
+  const els = [root, ...root.querySelectorAll('[placeholder],[title]')];
+  els.forEach((el) => ['placeholder', 'title'].forEach((a) => {
+    const v = el.getAttribute && el.getAttribute(a);
+    if (v) { const r = trText(v); if (r !== null && r !== v) el.setAttribute(a, r); }
+  }));
+}
+function startI18n() {
+  if (!EN() || typeof MutationObserver === 'undefined' || !document.body) return;
+  // les fenêtres de confirmation aussi
+  const nativeConfirm = window.confirm.bind(window);
+  window.confirm = (m) => nativeConfirm((m && trText(String(m))) || m);
+  document.documentElement.lang = 'en';
+  translateTree(document.body);
+  new MutationObserver((muts) => {
+    for (const m of muts) {
+      if (m.type === 'characterData') translateTree(m.target);
+      else m.addedNodes.forEach((n0) => translateTree(n0));
+    }
+  }).observe(document.body, { childList: true, subtree: true, characterData: true });
+}
+function setLang(l) {
+  if (l === LANG) return;
+  try { localStorage.setItem('bm_lang', l); } catch (_) { /* rien */ }
+  location.reload(); // tout se réaffiche dans la nouvelle langue
+}
+const FLAG_FR = '<svg viewBox="0 0 3 2" class="flag"><rect width="1" height="2" fill="#0055A4"/><rect x="1" width="1" height="2" fill="#fff"/><rect x="2" width="1" height="2" fill="#EF4135"/></svg>';
+const FLAG_EN = '<svg viewBox="0 0 60 30" class="flag"><clipPath id="fgb"><path d="M0 0v30h60V0z"/></clipPath><clipPath id="fgt"><path d="M30 15h30v15zv15H0zH0V0zV0h30z"/></clipPath><g clip-path="url(#fgb)"><path d="M0 0v30h60V0z" fill="#012169"/><path d="M0 0l60 30m0-30L0 30" stroke="#fff" stroke-width="6"/><path d="M0 0l60 30m0-30L0 30" clip-path="url(#fgt)" stroke="#C8102E" stroke-width="4"/><path d="M30 0v30M0 15h60" stroke="#fff" stroke-width="10"/><path d="M30 0v30M0 15h60" stroke="#C8102E" stroke-width="6"/></g></svg>';
+function langSwitch(cls = '') {
+  return `<div class="lang-switch ${cls}" data-noi18n>
+    <button type="button" class="${LANG === 'fr' ? 'on' : ''}" data-action="lang" data-lang="fr" title="Français">${FLAG_FR}<span>FR</span></button>
+    <button type="button" class="${LANG === 'en' ? 'on' : ''}" data-action="lang" data-lang="en" title="English">${FLAG_EN}<span>EN</span></button></div>`;
+}
+
+/* =====================================================================
+   GUIDE : à quoi sert chaque onglet
+   ===================================================================== */
+const GUIDE_ADMIN = [
+  ['home', 'Tableau de bord', 'Dashboard', 'Ta vue d\'ensemble : commandes à attribuer, à valider, en retard, ta part du mois, ce que tu dois aux boosters et le solde Eldorado.', 'Your overview: orders to assign, to validate, late, your share this month, what you owe boosters and the Eldorado balance.'],
+  ['list', 'Commandes', 'Orders', 'Crée une commande (Ctrl+N), attribue-la à un booster, suis son avancement, valide-la une fois livrée. Frais et parts sont calculés tout seuls.', 'Create an order (Ctrl+N), assign it to a booster, follow its progress, validate it once delivered. Fees and shares are calculated automatically.'],
+  ['users', 'Équipe', 'Team', 'Tes boosters : dispo, licence, gains, ce qu\'il leur reste à payer. Boutons Payer, Clé, Renommer, Supprimer.', 'Your boosters: availability, license, earnings, what is left to pay. Pay, Key, Rename, Delete buttons.'],
+  ['send', 'Messages', 'Messages', 'Le salon Général (toute l\'équipe) et les messages privés. Photos, fichiers, vocaux et émojis.', 'The General room (whole team) and private messages. Photos, files, voice messages and emojis.'],
+  ['megaphone', 'Annonces', 'Announcements', 'Un message officiel pour toute l\'équipe ou une note privée pour un booster. Il apparaît sur leur accueil avec une notification.', 'An official message to the whole team or a private note to one booster. It shows on their home page with a notification.'],
+  ['users', 'Profils', 'Profiles', 'La carte de chaque membre : photo, bannière, bio, jeux, Discord. Clique sur quelqu\'un pour voir son profil.', 'Each member\'s card: photo, banner, bio, games, Discord. Click someone to see their profile.'],
+  ['trophy', 'Wallet équipe', 'Team wallet', 'Le classement du mois et l\'objectif de l\'équipe.', 'The monthly ranking and the team goal.'],
+  ['globe', 'Eldorado', 'Eldorado', 'Ouvre ton compte Eldorado et note ton solde : l\'app te dit ce qui est à toi et ce qui revient aux boosters. Toi seul as cet onglet.', 'Open your Eldorado account and record your balance: the app tells you what is yours and what belongs to boosters. Only you have this tab.'],
+  ['wallet', 'Wallet Eldorado', 'Eldorado wallet', 'Note chaque retrait fait sur Eldorado (et ses frais) pour garder des comptes justes.', 'Record every withdrawal made on Eldorado (and its fees) to keep accurate accounts.'],
+  ['dollar', 'Paiements', 'Payments', 'Note chaque paiement envoyé à un booster : son « reste à payer » se met à jour et il est notifié.', 'Record each payment sent to a booster: their "left to pay" updates and they get notified.'],
+  ['chart', 'Calculateur', 'Calculator', 'Ce que touche chacun pour un prix donné, et le prix minimum à afficher sur Eldorado.', 'What everyone gets for a given price, and the minimum price to show on Eldorado.'],
+  ['key', 'Licences', 'Licenses', 'Crée, prolonge ou coupe l\'accès de chaque booster avec une clé.', 'Create, extend or cut each booster\'s access with a key.'],
+  ['settings', 'Paramètres', 'Settings', 'Tes réglages (logo, bannière, couleurs, sons, profil) et ceux de l\'équipe (taux Eldorado, règles de partage, A2F, journal des erreurs).', 'Your settings (logo, banner, colors, sounds, profile) and team settings (Eldorado rate, split rules, 2FA, error log).'],
+  ['sparkles', 'Nouveautés', 'Update info', 'Les notes de mise à jour : nouveautés et corrections de chaque version.', 'Update notes: new features and fixes in each version.'],
+];
+const GUIDE_BOOSTER = [
+  ['home', 'Accueil', 'Home', 'Tes commandes en cours, les annonces de Flowey et ta dispo (Disponible / Occupé / Absent). Garde-la toujours à jour.', 'Your current orders, Flowey\'s announcements and your status (Available / Busy / Away). Always keep it up to date.'],
+  ['list', 'Mes commandes', 'My orders', 'Les commandes qu\'on t\'a attribuées. Clique sur « Je commence » puis « J\'ai terminé ». Les accès du compte client sont dans la commande.', 'Orders assigned to you. Click "Start" then "I\'m done". The client\'s account access is inside the order.'],
+  ['dollar', 'Mes gains', 'My earnings', 'Ce que tu as gagné, ce que tu as déjà reçu et ce qu\'il te reste à recevoir. Indique aussi où recevoir tes paiements.', 'What you earned, already received and still have to receive. Also set where to receive your payments.'],
+  ['send', 'Messages', 'Messages', 'Le salon Général (toute l\'équipe) et les messages privés. Photos, fichiers, vocaux et émojis.', 'The General room (whole team) and private messages. Photos, files, voice messages and emojis.'],
+  ['users', 'Profils', 'Profiles', 'La carte de chaque membre de l\'équipe. Modifie la tienne en cliquant sur ta photo en bas à gauche.', 'Each team member\'s card. Edit yours by clicking your photo at the bottom left.'],
+  ['trophy', 'Wallet équipe', 'Team wallet', 'Le classement du mois et l\'objectif de l\'équipe.', 'The monthly ranking and the team goal.'],
+  ['settings', 'Paramètres', 'Settings', 'Personnalise ton app : logo, bannière, couleurs, taille, sons, notifications.', 'Customize your app: logo, banner, colors, size, sounds, notifications.'],
+  ['key', 'Ma licence', 'My license', 'La date de fin de ton accès. Colle ici une nouvelle clé si Flowey t\'en envoie une.', 'Your access end date. Paste a new key here if Flowey sends you one.'],
+  ['sparkles', 'Nouveautés', 'Update info', 'Les notes de mise à jour : nouveautés et corrections de chaque version.', 'Update notes: new features and fixes in each version.'],
+];
+async function viewGuide(main) {
+  const list = isAdmin() ? GUIDE_ADMIN : GUIDE_BOOSTER;
+  const tips = isAdmin()
+    ? [L('Ctrl + N ouvre une nouvelle commande de n\'importe où.', 'Ctrl + N opens a new order from anywhere.'),
+      L('Clique sur une petite photo (chat, équipe…) pour voir le profil de la personne.', 'Click a small photo (chat, team…) to see that person\'s profile.'),
+      L('Une mise à jour arrive ? Clique « Mettre à jour » : l\'app se ferme ~20 s et se rouvre toute seule.', 'An update is ready? Click "Update now": the app closes ~20 s and reopens by itself.')]
+    : [L('Ne prends pas de commande si l\'app ne marche pas : attends que tout refonctionne.', 'Do not take orders if the app is not working: wait until everything works again.'),
+      L('Garde ta dispo à jour sur l\'accueil.', 'Keep your status up to date on the home page.'),
+      L('Une mise à jour arrive ? Clique « Mettre à jour » : l\'app se ferme ~20 s et se rouvre toute seule.', 'An update is ready? Click "Update now": the app closes ~20 s and reopens by itself.'),
+      L('Ne partage jamais ta clé de licence.', 'Never share your license key.')];
+  main.innerHTML = `${head(L('Guide', 'Guide'), L('À quoi sert chaque onglet de l\'app', 'What each tab of the app is for'))}
+  <div class="guide-grid" data-noi18n>${list.map(([icon, fr, en, dfr, den], i) => `<div class="guide-card" style="animation-delay:${i * 35}ms">
+    <div class="guide-ic">${ic(icon)}</div><div><h3>${esc(L(fr, en))}</h3><p>${esc(L(dfr, den))}</p></div></div>`).join('')}</div>
+  <div class="card" data-noi18n><div class="card-head"><h2>${ic('sparkles')} ${esc(L('Astuces', 'Tips'))}</h2></div>
+    <ul class="tips">${tips.map((t) => `<li>${esc(t)}</li>`).join('')}</ul></div>`;
+}
+
+/* =====================================================================
+   NOUVEAUTÉS : notes de mise à jour
+   ===================================================================== */
+const CHANGELOG = [
+  ['3.6.0', '2026-09-28', [
+    ['new', 'Onglet Guide : à quoi sert chaque onglet', 'Guide tab: what each tab is for'],
+    ['new', 'Onglet Nouveautés : toutes les notes de mise à jour', 'Update info tab: all update notes'],
+    ['new', 'Langue français / anglais avec les drapeaux dans le menu', 'French / English language with flags in the menu'],
+    ['better', 'Finitions de l\'interface : transitions, menu, barres de défilement', 'Interface polish: transitions, menu, scrollbars'],
+  ]],
+  ['3.5', '2026-09-27', [
+    ['fix', 'L\'app se fermait toute seule chez les boosters (icônes des raccourcis au démarrage)', 'The app closed by itself on boosters\' PCs (shortcut icons at startup)'],
+    ['fix', 'Plus aucune installation de mise à jour en arrière-plan', 'No more background update installs'],
+    ['fix', 'Couleurs qui suivent tous les GIF, même longs', 'Colors now follow every GIF, even long ones'],
+    ['fix', '« permission denied » sur le Wallet équipe', '"permission denied" on Team wallet'],
+    ['new', 'Double authentification par email (code à 6 chiffres, 10 min)', 'Email two-factor authentication (6-digit code, 10 min)'],
+  ]],
+  ['3.4', '2026-09-27', [
+    ['fix', 'Messagerie bloquée / plus de défilement', 'Message box frozen / no scrolling'],
+    ['new', 'Journal des erreurs pour Flowey', 'Error log for Flowey'],
+    ['better', 'Mode léger automatique si l\'app plante', 'Automatic light mode if the app crashes'],
+  ]],
+  ['3.3', '2026-09-27', [
+    ['new', 'Émojis, messages vocaux et lecture à voix haute', 'Emojis, voice messages and read aloud'],
+  ]],
+  ['3.2', '2026-09-27', [
+    ['new', 'Pièces jointes dans la messagerie (25 Mo)', 'Attachments in messages (25 MB)'],
+    ['better', 'Pages instantanées, app plus rapide', 'Instant pages, faster app'],
+  ]],
+  ['3.1', '2026-09-27', [
+    ['new', 'Messagerie : salon Général + messages privés', 'Messaging: General room + private messages'],
+    ['new', 'Logo personnel dans la barre des tâches', 'Personal logo in the taskbar'],
+  ]],
+  ['3.0', '2026-09-27', [
+    ['new', 'Paramètres pour tous : couleurs, taille, coins, animations', 'Settings for everyone: colors, size, corners, animations'],
+    ['new', 'Sons de notification (5 sons, par type)', 'Notification sounds (5 sounds, per type)'],
+    ['better', 'App beaucoup plus légère pour les petits PC', 'Much lighter app for smaller PCs'],
+  ]],
+  ['2.9', '2026-09-27', [['new', 'Profils d\'équipe : bio, jeux, Discord, couleur, bannière', 'Team profiles: bio, games, Discord, color, banner']]],
+  ['2.8', '2026-09-27', [['new', 'Photos de profil en GIF, bannière de fond animée', 'GIF profile pictures, animated background banner']]],
+  ['2.7', '2026-09-27', [['new', 'Chacun choisit le logo de son app', 'Everyone picks their own app logo']]],
+  ['2.6', '2026-09-27', [
+    ['new', 'Mises à jour automatiques : plus rien à télécharger', 'Automatic updates: nothing to download anymore'],
+    ['new', 'Renommer ou supprimer un booster', 'Rename or delete a booster'],
+  ]],
+];
+const NOTE_KINDS = { new: ['Nouveau', 'New', 'b-green'], fix: ['Correction', 'Fix', 'b-orange'], better: ['Amélioration', 'Improvement', 'b-blue'] };
+const kindBadge = (k) => { const x = NOTE_KINDS[k] || NOTE_KINDS.new; return `<span class="badge ${x[2]}">${esc(L(x[0], x[1]))}</span>`; };
+async function viewUpdates(main) {
+  let notes = [];
+  try { notes = await run(sb.from('update_notes').select('*').order('created_at', { ascending: false }).limit(50)); } catch (_) { notes = []; }
+  try { localStorage.setItem('bm_updates_seen', new Date().toISOString()); } catch (_) { /* rien */ }
+  const dot = document.querySelector('.nav-item[data-view="updates"] .nav-dot'); if (dot && dot.remove) dot.remove();
+  main.innerHTML = `${head(L('Nouveautés', 'Update info'), L('Nouveautés, corrections de bugs et infos de mise à jour', 'New features, bug fixes and update info'))}
+  ${isAdmin() ? `<form class="card" data-form="update-note"><div class="card-head"><h2>${ic('plus')} ${esc(L('Publier une note', 'Post a note'))}</h2></div>
+    <div class="form-grid">
+      ${field(L('Version', 'Version'), `<input name="version" placeholder="ex. 3.6.0" value="${esc(S.appVersion || '')}">`)}
+      ${field(L('Type', 'Type'), `<select name="kind">${Object.entries(NOTE_KINDS).map(([k, x]) => `<option value="${k}">${esc(L(x[0], x[1]))}</option>`).join('')}</select>`)}
+      ${field(L('Titre', 'Title'), '<input name="title" required maxlength="120">', 'class="field span-2"')}
+      ${field(L('Détails (une ligne par point)', 'Details (one line per point)'), '<textarea name="body" maxlength="2000"></textarea>', 'class="field span-all"')}
+    </div>
+    <div class="form-actions"><button class="primary" type="submit">${ic('send')} ${esc(L('Publier', 'Publish'))}</button>
+      <span class="muted small">${esc(L('Toute l\'équipe la voit dans cet onglet, avec un point rouge dans le menu.', 'The whole team sees it in this tab, with a red dot in the menu.'))}</span></div></form>` : ''}
+  <div class="card" data-noi18n><div class="card-head"><h2>${ic('megaphone')} ${esc(L('Notes de Flowey', 'Flowey\'s notes'))}</h2></div>
+    ${notes.length ? `<div class="timeline">${notes.map((x) => `<div class="tl-item"><div class="tl-dot"></div><div class="tl-body">
+      <div class="tl-head">${kindBadge(x.kind)}${x.version ? `<span class="tl-ver">v${esc(x.version)}</span>` : ''}<b>${esc(x.title)}</b>
+        <span class="muted small">${fdt(x.created_at)}</span>${isAdmin() ? `<button class="sm ghost" data-action="del-note" data-id="${x.id}" title="Supprimer">${ic('x')}</button>` : ''}</div>
+      ${x.body ? `<ul class="tl-list">${x.body.split('\n').map((l) => l.trim()).filter(Boolean).map((l) => `<li>${esc(l.replace(/^[-•*]\s*/, ''))}</li>`).join('')}</ul>` : ''}</div></div>`).join('')}</div>`
+    : emptyBox(L('Aucune note pour l\'instant.', 'No notes yet.'), 'megaphone')}</div>
+  <div class="card" data-noi18n><div class="card-head"><h2>${ic('sparkles')} ${esc(L('Historique des versions', 'Version history'))}</h2>
+    <span class="muted small">${esc(L('Ta version', 'Your version'))} : v${esc(S.appVersion || '?')}</span></div>
+    <div class="timeline">${CHANGELOG.map(([v, d, items]) => `<div class="tl-item"><div class="tl-dot ${v === (S.appVersion || '').replace(/\.0$/, '') || v === S.appVersion ? 'current' : ''}"></div><div class="tl-body">
+      <div class="tl-head"><span class="tl-ver">v${esc(v)}</span><span class="muted small">${fdate(d)}</span></div>
+      <ul class="tl-list plain">${items.map(([k, fr, en]) => `<li>${kindBadge(k)} ${esc(L(fr, en))}</li>`).join('')}</ul></div></div>`).join('')}</div></div>`;
+}
+// point rouge sur « Nouveautés » s'il y a une note que la personne n'a pas vue
+async function checkUpdateNotes() {
+  try {
+    const rows = await run(sb.from('update_notes').select('created_at').order('created_at', { ascending: false }).limit(1));
+    let seen = ''; try { seen = localStorage.getItem('bm_updates_seen') || ''; } catch (_) { /* rien */ }
+    if (rows && rows[0] && rows[0].created_at > seen) {
+      const b = document.querySelector('.nav-item[data-view="updates"]');
+      if (b && !b.querySelector('.nav-dot')) b.insertAdjacentHTML('beforeend', '<span class="nav-dot"></span>');
+    }
+  } catch (_) { /* table pas encore créée */ }
+}
+// après une mise à jour de l'app : petite fenêtre « Quoi de neuf »
+function whatsNew() {
+  const v = S.appVersion; if (!v) return;
+  let seen = ''; try { seen = localStorage.getItem('bm_version_seen') || ''; } catch (_) { /* rien */ }
+  try { localStorage.setItem('bm_version_seen', v); } catch (_) { /* rien */ }
+  if (!seen || seen === v) return;
+  const entry = CHANGELOG.find(([ver]) => v === ver || v.startsWith(ver + '.'));
+  if (!entry) return;
+  modal(`<div data-noi18n><div class="card-head"><h2>${ic('rocket')} ${esc(L('Quoi de neuf dans la', 'What\'s new in'))} v${esc(v)}</h2>
+      <button type="button" class="sm ghost" data-action="close-modal">${ic('x')}</button></div>
+    <ul class="tl-list plain">${entry[2].map(([k, fr, en]) => `<li>${kindBadge(k)} ${esc(L(fr, en))}</li>`).join('')}</ul>
+    <div class="form-actions"><button class="primary" data-action="close-modal">${esc(L('Super !', 'Great!'))}</button>
+      <button data-action="nav" data-view="updates">${esc(L('Voir toutes les nouveautés', 'See all updates'))}</button></div></div>`, 'small');
 }
 
 /* ---------------- préférences personnelles (propres à chaque PC) ---------------- */
@@ -365,7 +578,7 @@ function tickOtp() {
 }
 function render2FA(error = '') {
   const email = (S.access && S.access.email) || '';
-  $('#app').innerHTML = `<div class="center-screen"><form class="auth-card" data-form="otp">
+  $('#app').innerHTML = `<div class="center-screen">${langSwitch('corner')}<form class="auth-card" data-form="otp">
     <div class="brand"><img class="logo" src="${logoSrc()}" alt=""><h1>Vérification</h1></div>
     <p class="muted">Un code à <b>6 chiffres</b> a été envoyé à <b>${esc(email)}</b>.<br>Il expire dans <b id="otp-timer">10:00</b>.</p>
     ${otpBoxes()}
@@ -1057,13 +1270,14 @@ async function checkLastCrash() {
 
 /* ---------------- démarrage ---------------- */
 async function boot() {
+  startI18n();
   initUpdater();
   if (window.desktop && window.desktop.bootFlags) { try { S.boot = await window.desktop.bootFlags(); S.safeMode = !!S.boot.safe; } catch (_) { /* rien */ } }
   applyPrefs();
   await initTheme();
   if (!S.safeMode) await initBanner();
   if (!window.supabase || !CFG.SUPABASE_URL || /COLLE/.test(CFG.SUPABASE_URL + CFG.SUPABASE_ANON_KEY)) {
-    $('#app').innerHTML = `<div class="center-screen"><div class="auth-card">
+    $('#app').innerHTML = `<div class="center-screen">${langSwitch('corner')}<div class="auth-card">
       <div class="brand"><img class="logo" src="${logoSrc()}" alt="Flowey's Software Manager"><h1>Configuration requise</h1></div>
       <p class="muted">${window.supabase ? 'Ouvre le fichier <b>src/config.js</b> avec le Bloc-notes, colle l\'URL et la clé de ton projet Supabase (GUIDE, étape 4), enregistre, puis relance.'
     : 'Il manque des fichiers : double-clique sur <b>1-INSTALLER.bat</b> dans le dossier du projet, puis relance.'}</p>
@@ -1121,7 +1335,7 @@ setInterval(async () => {
 
 /* ---------------- connexion ---------------- */
 function renderAuth(error = '') {
-  $('#app').innerHTML = `<div class="center-screen"><form class="auth-card" data-form="login">
+  $('#app').innerHTML = `<div class="center-screen">${langSwitch('corner')}<form class="auth-card" data-form="login">
     <div class="brand"><img class="logo" src="${logoSrc()}" alt="Flowey's Software Manager"><div><h1>Flowey's Software Manager</h1>
     <div class="muted small">Commandes · Équipe · Wallet</div></div></div>
     ${field('Email', '<input name="email" type="email" required autofocus>')}
@@ -1162,7 +1376,7 @@ async function logout() {
 function renderGate(error = '') {
   const a = S.access || {};
   if (a.admin_exists === false) {
-    $('#app').innerHTML = `<div class="center-screen"><div class="auth-card">
+    $('#app').innerHTML = `<div class="center-screen">${langSwitch('corner')}<div class="auth-card">
       <div class="brand"><img class="logo" src="${logoSrc()}" alt="Flowey's Software Manager"><h1>Bienvenue !</h1></div>
       <p class="muted">Aucun admin n'existe encore. Si tu es <b>Flowey</b> (le propriétaire), clique ci-dessous pour devenir admin.
       Ce bouton ne fonctionne qu'une seule fois : ensuite, plus personne ne peut devenir admin.</p>
@@ -1177,7 +1391,7 @@ function renderGate(error = '') {
     expired: 'Ta licence a expiré. Demande une nouvelle clé à Flowey pour continuer.',
     revoked: 'Ta licence a été désactivée. Contacte Flowey.',
   }[a.status] || 'Licence requise.';
-  $('#app').innerHTML = `<div class="center-screen"><form class="auth-card" data-form="activate">
+  $('#app').innerHTML = `<div class="center-screen">${langSwitch('corner')}<form class="auth-card" data-form="activate">
     <div class="brand"><img class="logo" src="${logoSrc()}" alt="Flowey's Software Manager"><h1>Licence</h1></div>
     <p class="muted">${esc(msg)}</p>
     ${field('Clé de licence', '<input name="key" class="key-input" placeholder="BOOST-XXXX-XXXX-XXXX-XXXX" required autofocus>')}
@@ -1208,11 +1422,13 @@ const NAV_ADMIN = [
   ['Communication', [['chat', 'send', 'Messages'], ['announcements', 'megaphone', 'Annonces'], ['profiles', 'users', 'Profils'], ['wallet', 'trophy', 'Wallet équipe']]],
   ['Argent', [['eldorado', 'globe', 'Eldorado'], ['withdrawals', 'wallet', 'Wallet Eldorado'], ['payments', 'send', 'Paiements']]],
   ['Outils', [['calc', 'chart', 'Calculateur'], ['licenses', 'key', 'Licences'], ['settings', 'settings', 'Paramètres']]],
+  ['Aide', [['guide', 'book', 'Guide'], ['updates', 'sparkles', 'Nouveautés']]],
 ];
 const NAV_BOOSTER = [
   ['Mon espace', [['home', 'home', 'Accueil'], ['myorders', 'list', 'Mes commandes'], ['earnings', 'dollar', 'Mes gains']]],
   ['Équipe', [['chat', 'send', 'Messages'], ['profiles', 'users', 'Profils'], ['wallet', 'trophy', 'Wallet équipe']]],
   ['Compte', [['mysettings', 'settings', 'Paramètres'], ['license', 'key', 'Ma licence']]],
+  ['Aide', [['guide', 'book', 'Guide'], ['updates', 'sparkles', 'Nouveautés']]],
 ];
 
 function renderShell(view) {
@@ -1227,6 +1443,7 @@ function renderShell(view) {
       ${nav.map(([group, items]) => `<div class="nav-group">${group}</div>
         ${items.map(([id, icon, label]) => `<button class="nav-item" data-action="nav" data-view="${id}">${ic(icon)}<span>${label}</span></button>`).join('')}`).join('')}
       <div class="spacer"></div>
+      ${langSwitch()}
       <div class="userbox"><button class="avatar-btn" id="my-avatar" data-action="my-profile" title="Mon profil">${avatarHtml(name)}</button>
         <div class="who"><div class="email">${esc(name)}</div><div class="muted">${esc(sub)}</div></div>
         <button class="sm ghost" data-action="logout" title="Se déconnecter">${ic('logout')}</button></div>
@@ -1238,8 +1455,9 @@ function renderShell(view) {
   if (!S.crashChecked) { S.crashChecked = true; setTimeout(checkLastCrash, 3000); }
   loadChatSummary().catch(() => { /* messagerie pas encore installée dans Supabase */ });
   setTimeout(prefetchViews, 2500);
+  setTimeout(checkUpdateNotes, 1500);
   if (window.desktop && window.desktop.version) {
-    window.desktop.version().then((v) => { S.appVersion = v; const el = $('#app-version'); if (el) el.textContent = 'v' + v; }).catch(() => {});
+    window.desktop.version().then((v) => { S.appVersion = v; const el = $('#app-version'); if (el) el.textContent = 'v' + v; setTimeout(whatsNew, 1200); }).catch(() => {});
   }
   go(view);
 }
@@ -2438,7 +2656,7 @@ const VIEWS = {
   dashboard: viewDashboard, orders: viewOrders, order: viewOrder, boosters: viewBoosters,
   announcements: viewAnnouncements, wallet: viewWallet, notifs: viewNotifs, payments: viewPayments,
   withdrawals: viewWithdrawals, eldorado: viewEldorado, calc: viewCalc, licenses: viewLicenses, settings: viewSettings,
-  home: viewHome, myorders: viewMyOrders, earnings: viewEarnings, license: viewLicense, profiles: viewProfiles, mysettings: viewMySettings, chat: viewChat,
+  home: viewHome, myorders: viewMyOrders, earnings: viewEarnings, license: viewLicense, profiles: viewProfiles, mysettings: viewMySettings, chat: viewChat, guide: viewGuide, updates: viewUpdates,
 };
 
 /* =====================================================================
@@ -2451,6 +2669,8 @@ const ACTIONS = {
   nav: (el) => go(el.dataset.view),
   logout: () => logout(),
   avatar: () => openAvatar(),
+  lang: (el) => setLang(el.dataset.lang),
+  'del-note': (el) => { if (confirm(L('Supprimer cette note ?', 'Delete this note?'))) act(run(sb.from('update_notes').delete().eq('id', el.dataset.id))); },
   'chat-open': (el) => openChannel(el.dataset.ch),
   'chat-file-clear': () => { S.chatFile = null; renderChatFileChip(); },
   'emoji-toggle': () => { const p0 = $('#emoji-panel'); if (!p0) return; if (!p0.innerHTML) renderEmojiPanel(); p0.classList.toggle('hidden'); },
@@ -2649,6 +2869,10 @@ const FORMS = {
     if (error) return toast('Code refusé : ' + errMsg(error), 'error');
     S.otpTested = true; S.otpSentAt = null; closeModal(); toast('Test réussi : tu peux activer l\'A2F');
     await loadRefs(); refresh();
+  },
+  'update-note': (f) => {
+    const o = formData(f);
+    act(run(sb.from('update_notes').insert({ version: o.version || null, kind: o.kind, title: o.title, body: o.body || null })), L('Note publiée', 'Note posted'));
   },
   'team-msg': async (f) => {
     const ta = f.elements.body; const body = ta.value.trim(); const file = S.chatFile;
