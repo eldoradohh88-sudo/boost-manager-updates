@@ -1207,6 +1207,39 @@ drop policy if exists team_read on public.update_notes;
 create policy team_read on public.update_notes for select using (public.has_access());
 
 -- ---------------------------------------------------------------------
+-- BOT ELDORADO (v3.7) : commandes et demandes importées via l'API officielle
+-- ---------------------------------------------------------------------
+alter table public.orders add column if not exists eldorado_order_id uuid;
+alter table public.orders add column if not exists eldorado_state text;
+create unique index if not exists orders_eldorado_order_id_key on public.orders(eldorado_order_id) where eldorado_order_id is not null;
+alter table public.app_settings add column if not exists eldorado_bot_last_sync timestamptz;
+alter table public.app_settings add column if not exists eldorado_bot_error text;
+alter table public.app_settings add column if not exists eldorado_online boolean;
+
+-- demandes de boosting reçues (visibles par Flowey seulement)
+create table if not exists public.eldorado_requests (
+  id           uuid primary key,
+  game_id      text,
+  category     text,
+  buyer        text,
+  created_date timestamptz,
+  active       boolean not null default true,
+  seen_at      timestamptz not null default now()
+);
+alter table public.eldorado_requests enable row level security;
+drop policy if exists admin_all on public.eldorado_requests;
+create policy admin_all on public.eldorado_requests for all using (public.is_admin()) with check (public.is_admin());
+
+-- jeton de connexion Eldorado : aucune règle d'accès = illisible depuis l'app (seul le bot y touche)
+create table if not exists public.bot_secrets (
+  id            int primary key default 1 check (id = 1),
+  token         text,
+  token_expires timestamptz
+);
+alter table public.bot_secrets enable row level security;
+revoke all on public.bot_secrets from anon, authenticated;
+
+-- ---------------------------------------------------------------------
 -- DROITS : toutes les fonctions de l'app utilisables par les comptes connectés
 -- (chaque fonction vérifie elle-même la licence / le rôle admin)
 -- ---------------------------------------------------------------------

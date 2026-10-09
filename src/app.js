@@ -296,6 +296,12 @@ async function viewGuide(main) {
    NOUVEAUTÉS : notes de mise à jour
    ===================================================================== */
 const CHANGELOG = [
+  ['3.7.0', '2026-10-09', [
+    ['new', 'Bot Eldorado : les nouvelles commandes arrivent toutes seules dans l\'app (API officielle)', 'Eldorado bot: new orders arrive in the app by themselves (official API)'],
+    ['new', 'Alerte à chaque nouvelle demande de boosting (app + Discord)', 'Alert on every new boosting request (app + Discord)'],
+    ['new', 'Bouton « Marquer livrée sur Eldorado » dans la commande', '"Mark delivered on Eldorado" button in the order'],
+    ['new', 'Passer en ligne / hors ligne sur Eldorado depuis l\'app', 'Go online / offline on Eldorado from the app'],
+  ]],
   ['3.6.0', '2026-09-28', [
     ['new', 'Onglet Guide : à quoi sert chaque onglet', 'Guide tab: what each tab is for'],
     ['new', 'Onglet Nouveautés : toutes les notes de mise à jour', 'Update info tab: all update notes'],
@@ -1992,6 +1998,7 @@ async function viewOrder(main) {
       actions += `<button data-action="edit-order" data-id="${o.id}">${ic('edit')} Modifier</button>`;
       actions += `<button data-action="dup-order" data-id="${o.id}">${ic('copy')} Dupliquer</button>`;
       if (o.eldorado_url) actions += `<button data-action="open-eldo" data-url="${esc(o.eldorado_url)}">${ic('external')} Voir sur Eldorado</button>`;
+      if (o.eldorado_order_id && !['Delivered', 'Received', 'Completed', 'Canceled'].includes(o.eldorado_state)) actions += `<button class="primary" data-action="eldo-deliver" data-id="${o.id}" data-ref="${esc(o.ref)}">${ic('rocket')} Marquer livrée sur Eldorado</button>`;
       actions += `<button class="danger" data-action="cancel-order" data-id="${o.id}">Annuler la commande</button>`;
       actions += `<button class="danger" data-action="del-order" data-id="${o.id}" data-ref="${esc(o.ref)}">${ic('x')} Supprimer</button>`;
     } else {
@@ -2204,7 +2211,48 @@ function parseAmount(raw) {
   return Number(int + '.' + t.slice(sep + 1));
 }
 
+/* ---------------- bot Eldorado (API officielle, tourne sur Supabase) ---------------- */
+async function botCall(action, extra = {}) {
+  const { data, error } = await sb.functions.invoke('eldorado-bot', { body: { action, ...extra } });
+  if (error) {
+    let msg = error.message;
+    try { const j = await error.context.json(); if (j && j.error) msg = j.error; } catch (_) { /* rien */ }
+    if (/Failed to send|not found|404/i.test(msg)) msg = L('Le bot n\'est pas encore installé dans Supabase (voir les étapes de Claude).', 'The bot is not installed in Supabase yet.');
+    throw new Error(msg);
+  }
+  return data;
+}
+function botCard(st, reqs) {
+  const last = st && st.eldorado_bot_last_sync;
+  const err = st && st.eldorado_bot_error;
+  const ok = last && !err && Date.now() - new Date(last) < 10 * 60000;
+  return `<div class="card"><div class="card-head"><h2>${ic('rocket')} Bot Eldorado</h2>
+      <span class="badge ${ok ? 'b-green' : err ? 'b-red' : 'b-grey'}">${ok ? 'Actif' : err ? 'Erreur' : 'Pas encore lancé'}</span></div>
+    <p class="muted small">Toutes les 2 minutes, il importe tes nouvelles commandes Eldorado dans l'app et te prévient des nouvelles demandes de boosting. Il tourne sur Supabase, même PC éteint.</p>
+    <div class="chain">
+      <div class="row"><span>Dernière synchro</span><b>${last ? fdt(last) : '—'}</b></div>
+      <div class="row"><span>Statut Eldorado</span><b>${st && st.eldorado_online === true ? '<span class="green">En ligne</span>' : st && st.eldorado_online === false ? 'Hors ligne' : '—'}</b></div>
+    </div>
+    ${err ? `<div class="error-box">${esc(err)}</div>` : ''}
+    <div class="form-actions">
+      <button class="primary" data-action="bot" data-bot="sync">${ic('refresh')} Synchroniser maintenant</button>
+      <button data-action="bot" data-bot="test">${ic('check')} Tester la connexion</button>
+      <button data-action="bot" data-bot="online">En ligne</button>
+      <button data-action="bot" data-bot="offline">Hors ligne</button>
+    </div>
+    <h3 style="margin-top:18px">Demandes de boosting actives</h3>
+    ${reqs.length ? `<div class="chain">${reqs.map((r) => `<div class="row"><span><b>${esc(r.category || 'Boost')}</b>${r.game_id ? ` <span class="muted small">· ${esc(r.game_id)}</span>` : ''}${r.buyer ? ` <span class="muted small">· ${esc(r.buyer)}</span>` : ''}</span>
+      <span class="muted small">${fdt(r.created_date || r.seen_at)}</span></div>`).join('')}</div>
+      <p class="muted small">Réponds-leur sur Eldorado (onglet des demandes de boosting).</p>`
+    : emptyBox('Aucune demande active pour l\'instant.', 'inbox')}</div>`;
+}
+
 async function viewEldorado(main) {
+  let botSt = null; let botReqs = [];
+  await Promise.all([
+    sb.from('app_settings').select('eldorado_bot_last_sync, eldorado_bot_error, eldorado_online').eq('id', 1).maybeSingle().then((r) => { botSt = r.data; }, () => {}),
+    sb.from('eldorado_requests').select('*').eq('active', true).order('created_date', { ascending: false }).limit(20).then((r) => { botReqs = r.data || []; }, () => {}),
+  ]);
   const d = await run(sb.rpc('admin_dashboard', { p_year: S.year, p_month: S.month }));
   S.dash = d;
   const el = d.eldorado;
@@ -2214,12 +2262,13 @@ async function viewEldorado(main) {
   const hasDesktop = !!(window.desktop && window.desktop.eldoradoOpen);
   const debts = d.boosters.map((b) => ({ ...b, rest: r2(n(b.earned) - n(b.paid)) })).filter((b) => b.rest > 0.004);
   main.innerHTML = `${head('Eldorado', 'Ton compte Eldorado et la répartition de ton solde · toi seul as cet onglet')}
+  ${botCard(botSt, botReqs)}
   <div class="grid-2">
     <div class="card onboard"><div class="card-head"><h2>${ic('globe')} Ton compte Eldorado</h2></div>
       <p>Ouvre Eldorado dans ton navigateur habituel (connexion et vérification normales).</p>
       <div class="form-actions">
         <button class="primary" data-action="eldorado-open" ${hasDesktop ? '' : 'disabled'}>${ic('external')} Ouvrir Eldorado</button></div>
-      <p class="muted small">Bientôt : tes commandes Eldorado importées automatiquement via l'API officielle.</p></div>
+      <p class="muted small">Le bot Eldorado (plus bas) importe tes commandes tout seul via l'API officielle.</p></div>
     <form class="card" data-form="real-balance"><div class="card-head"><h2>${ic('refresh')} Relever mon solde</h2></div>
       <p class="muted small">Tape le solde affiché sur Eldorado : l'app répartit tout de suite ce qui revient à chacun.</p>
       <div class="form-grid">
@@ -2672,6 +2721,23 @@ const ACTIONS = {
   lang: (el) => setLang(el.dataset.lang),
   'del-note': (el) => { if (confirm(L('Supprimer cette note ?', 'Delete this note?'))) act(run(sb.from('update_notes').delete().eq('id', el.dataset.id))); },
   'chat-open': (el) => openChannel(el.dataset.ch),
+  bot: async (el) => {
+    const a = el.dataset.bot; el.disabled = true;
+    try {
+      const r = await botCall(a);
+      const msgs = {
+        sync: L(`Synchro faite : ${n(r.newOrders)} nouvelle(s) commande(s), ${n(r.newRequests)} demande(s)`, `Sync done: ${n(r.newOrders)} new order(s), ${n(r.newRequests)} request(s)`),
+        test: L('Connexion à Eldorado OK', 'Eldorado connection OK'), online: L('Tu es en ligne sur Eldorado', "You're online on Eldorado"), offline: L('Tu es hors ligne sur Eldorado', "You're offline on Eldorado"),
+      };
+      toast(msgs[a] || 'OK');
+    } catch (e) { toast(errMsg(e), 'error'); }
+    el.disabled = false; refresh();
+  },
+  'eldo-deliver': async (el) => {
+    if (!confirm(L(`Marquer la commande ${el.dataset.ref} comme LIVRÉE sur Eldorado ? Le client en sera informé.`, `Mark order ${el.dataset.ref} as DELIVERED on Eldorado? The client will be notified.`))) return;
+    el.disabled = true;
+    try { await botCall('deliver', { orderId: el.dataset.id }); toast(L('Commande marquée livrée sur Eldorado', 'Order marked delivered on Eldorado')); refresh(); } catch (e) { toast(errMsg(e), 'error'); el.disabled = false; }
+  },
   'chat-file-clear': () => { S.chatFile = null; renderChatFileChip(); },
   'emoji-toggle': () => { const p0 = $('#emoji-panel'); if (!p0) return; if (!p0.innerHTML) renderEmojiPanel(); p0.classList.toggle('hidden'); },
   emoji: (el) => { const ta = document.querySelector('.tchat-form textarea'); if (ta) insertAtCursor(ta, el.dataset.e); },

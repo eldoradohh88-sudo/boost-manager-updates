@@ -315,3 +315,13 @@ window.I18N_EN_RULES.push(
   [/^Test réussi.*$/, 'Test passed: you can enable 2FA'],
 );
 window.I18N_EN_RULES.push([/^(Janvier|Février|Mars|Avril|Mai|Juin|Juillet|Août|Septembre|Octobre|Novembre|Décembre) (\d{4})$/, (m, mo, y) => `${window.I18N_EN[mo]} ${y}`]);
+Object.assign(window.I18N_EN, {
+  'Bot Eldorado': 'Eldorado bot', 'Actif': 'Active', 'Erreur': 'Error', 'Pas encore lancé': 'Not started yet',
+  "Toutes les 2 minutes, il importe tes nouvelles commandes Eldorado dans l'app et te prévient des nouvelles demandes de boosting. Il tourne sur Supabase, même PC éteint.": 'Every 2 minutes, it imports your new Eldorado orders into the app and alerts you about new boosting requests. It runs on Supabase, even with your PC off.',
+  'Dernière synchro': 'Last sync', 'Statut Eldorado': 'Eldorado status', 'En ligne': 'Online', 'Hors ligne': 'Offline',
+  'Synchroniser maintenant': 'Sync now', 'Tester la connexion': 'Test connection', 'Demandes de boosting actives': 'Active boosting requests',
+  'Réponds-leur sur Eldorado (onglet des demandes de boosting).': 'Answer them on Eldorado (boosting requests tab).',
+  "Aucune demande active pour l'instant.": 'No active requests yet.', 'Marquer livrée sur Eldorado': 'Mark delivered on Eldorado',
+  "Le bot Eldorado (plus bas) importe tes commandes tout seul via l'API officielle.": 'The Eldorado bot (below) imports your orders automatically through the official API.',
+  'Nouvelle commande Eldorado': 'New Eldorado order', 'Demande de boosting Eldorado': 'Eldorado boosting request', 'Commande annulée sur Eldorado': 'Order cancelled on Eldorado',
+});
