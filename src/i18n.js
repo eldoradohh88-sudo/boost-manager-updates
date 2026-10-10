@@ -336,3 +336,19 @@ Object.assign(window.I18N_EN, {
   'Offre retirée': 'Offer withdrawn',
   'Bot': 'Bot',
 });
+
+// v3.9 : nouveau menu, solde et parts
+Object.assign(window.I18N_EN, {
+  'Activité': 'Activity', 'Gestion': 'Management', 'Réglages': 'Settings', 'Argent': 'Money', 'Aide': 'Help',
+  'Solde et parts': 'Balance and shares', 'Retraits': 'Withdrawals', 'Classement': 'Ranking', 'Boosters': 'Boosters',
+  'Couleur par défaut': 'Default color', 'Couleur tirée de mon logo': 'Color from my logo', 'Couleur qui suit la bannière': 'Color follows the banner',
+  'Remplace l\'or par la couleur principale de ton logo.': 'Replaces gold with your logo\'s main color.',
+  'Or (couleur par défaut).': 'Gold (default color).', 'Couleur choisie à la main.': 'Color picked by hand.',
+  'Note ton solde': 'Note your balance', 'Écrire le solde': 'Write the balance',
+  'Ton compte Eldorado, le bot et tes retraits': 'Your Eldorado account, the bot and your withdrawals',
+  'Ouvre Eldorado dans ton navigateur habituel, avec ta connexion normale.': 'Open Eldorado in your usual browser, with your normal login.',
+  'Solde': 'Balance', 'Solde noté': 'Balance noted', 'Solde calculé': 'Computed balance', 'Dû aux boosters': 'Owed to boosters', 'À toi': 'Yours',
+  'Écrire le solde et les parts': 'Write the balance and shares',
+  'Note chaque retrait fait sur Eldorado pour que le solde reste juste.': 'Record every withdrawal made on Eldorado so the balance stays right.',
+  'Tu as fait un retrait ?': 'Made a withdrawal?', 'Noter un retrait': 'Record a withdrawal', 'Ouvrir Eldorado': 'Open Eldorado', 'Ton compte Eldorado': 'Your Eldorado account',
+});

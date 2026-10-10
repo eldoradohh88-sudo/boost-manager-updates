@@ -810,10 +810,10 @@ begin
         'total', coalesce(sum(amount),0)) from adjustments),
     'eldorado', (select jsonb_build_object(
         'net_orders', (select coalesce(sum(net),0) from orders where status = 'Terminée'),
-        'adj', (select coalesce(sum(amount),0) from adjustments),
+        'adj', (select coalesce(sum(amount),0) from adjustments where kind is distinct from 'correction'),
         'withdrawn', (select coalesce(sum(amount_usd),0) from withdrawals),
         'balance', (select coalesce(sum(net),0) from orders where status = 'Terminée')
-                 + (select coalesce(sum(amount),0) from adjustments)
+                 + (select coalesce(sum(amount),0) from adjustments where kind is distinct from 'correction')
                  - (select coalesce(sum(amount_usd),0) from withdrawals),
         'real', st.eldorado_balance, 'real_at', st.eldorado_balance_at) from app_settings st where st.id = 1),
     'counts', (select jsonb_build_object(
@@ -1284,6 +1284,24 @@ create policy admin_all on public.bot_price_profiles for all using (public.is_ad
 
 -- plus aucune notification pour les demandes de boosting
 delete from public.notifications where title = 'Demande de boosting Eldorado';
+
+
+-- ---------------------------------------------------------------------
+-- SOLDE & PARTS (v3.9) : Flowey écrit le solde et ce qu'il doit à chacun
+-- ---------------------------------------------------------------------
+-- une « correction » change ce qu'on doit à un booster sans changer le solde Eldorado calculé
+alter table public.adjustments add column if not exists kind text;
+create table if not exists public.balance_checks (
+  id         uuid primary key default gen_random_uuid(),
+  created_at timestamptz not null default now(),
+  balance    numeric(12,2) not null,
+  flowey     numeric(12,2) not null,
+  lines      jsonb not null default '[]'::jsonb,   -- [{ "booster_id", "name", "before", "owed" }]
+  note       text
+);
+alter table public.balance_checks enable row level security;
+drop policy if exists admin_all on public.balance_checks;
+create policy admin_all on public.balance_checks for all using (public.is_admin()) with check (public.is_admin());
 
 -- ---------------------------------------------------------------------
 -- DROITS : toutes les fonctions de l'app utilisables par les comptes connectés

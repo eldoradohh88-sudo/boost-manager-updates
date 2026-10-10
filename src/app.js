@@ -164,8 +164,11 @@ function applyTheme(vars) {
   themeKeys.forEach((k) => root.style.removeProperty(k)); // on repart du thème par défaut
   themeKeys = [];
   S.currentTheme = vars || null;
-  if (vars && typeof vars === 'object') {
-    Object.keys(vars).forEach((k) => { if (/^--[a-z0-9-]+$/.test(k)) { root.style.setProperty(k, String(vars[k])); themeKeys.push(k); } });
+  // design sobre : seule la couleur d'accent peut suivre le logo / la bannière, et seulement si on l'a demandé
+  const pf = prefs();
+  const allowed = pf.autoColors || (S.bannerUrl && pf.bannerColors);
+  if (allowed && vars && typeof vars === 'object') {
+    Object.keys(vars).forEach((k) => { if (/^--accent(-2|-soft|-line|-ink)?$/.test(k)) { root.style.setProperty(k, String(vars[k])); themeKeys.push(k); } });
   }
   applyAccentOverride();
 }
@@ -250,32 +253,21 @@ function langSwitch(cls = '') {
    GUIDE : à quoi sert chaque onglet
    ===================================================================== */
 const GUIDE_ADMIN = [
-  ['home', 'Tableau de bord', 'Dashboard', 'Ta vue d\'ensemble : commandes à attribuer, à valider, en retard, ta part du mois, ce que tu dois aux boosters et le solde Eldorado.', 'Your overview: orders to assign, to validate, late, your share this month, what you owe boosters and the Eldorado balance.'],
-  ['list', 'Commandes', 'Orders', 'Crée une commande (Ctrl+N), attribue-la à un booster, suis son avancement, valide-la une fois livrée. Frais et parts sont calculés tout seuls.', 'Create an order (Ctrl+N), assign it to a booster, follow its progress, validate it once delivered. Fees and shares are calculated automatically.'],
-  ['users', 'Équipe', 'Team', 'Tes boosters : dispo, licence, gains, ce qu\'il leur reste à payer. Boutons Payer, Clé, Renommer, Supprimer.', 'Your boosters: availability, license, earnings, what is left to pay. Pay, Key, Rename, Delete buttons.'],
-  ['send', 'Messages', 'Messages', 'Le salon Général (toute l\'équipe) et les messages privés. Photos, fichiers, vocaux et émojis.', 'The General room (whole team) and private messages. Photos, files, voice messages and emojis.'],
-  ['megaphone', 'Annonces', 'Announcements', 'Un message officiel pour toute l\'équipe ou une note privée pour un booster. Il apparaît sur leur accueil avec une notification.', 'An official message to the whole team or a private note to one booster. It shows on their home page with a notification.'],
-  ['users', 'Profils', 'Profiles', 'La carte de chaque membre : photo, bannière, bio, jeux, Discord. Clique sur quelqu\'un pour voir son profil.', 'Each member\'s card: photo, banner, bio, games, Discord. Click someone to see their profile.'],
-  ['trophy', 'Wallet équipe', 'Team wallet', 'Le classement du mois et l\'objectif de l\'équipe.', 'The monthly ranking and the team goal.'],
-  ['globe', 'Eldorado', 'Eldorado', 'Ouvre ton compte Eldorado et note ton solde : l\'app te dit ce qui est à toi et ce qui revient aux boosters. Toi seul as cet onglet.', 'Open your Eldorado account and record your balance: the app tells you what is yours and what belongs to boosters. Only you have this tab.'],
-  ['bot', 'Bot', 'Bot', 'Les demandes de boosting d\'Eldorado, tes offres (envoyées, gagnées, perdues) et tes tables de prix. Crée une table avec l\'assistant en expliquant avec tes mots, puis active les offres automatiques.', 'Eldorado boosting requests, your offers (sent, won, lost) and your price tables. Build a table with the assistant in your own words, then turn on automatic offers.'],
-  ['wallet', 'Wallet Eldorado', 'Eldorado wallet', 'Note chaque retrait fait sur Eldorado (et ses frais) pour garder des comptes justes.', 'Record every withdrawal made on Eldorado (and its fees) to keep accurate accounts.'],
-  ['dollar', 'Paiements', 'Payments', 'Note chaque paiement envoyé à un booster : son « reste à payer » se met à jour et il est notifié.', 'Record each payment sent to a booster: their "left to pay" updates and they get notified.'],
-  ['chart', 'Calculateur', 'Calculator', 'Ce que touche chacun pour un prix donné, et le prix minimum à afficher sur Eldorado.', 'What everyone gets for a given price, and the minimum price to show on Eldorado.'],
-  ['key', 'Licences', 'Licenses', 'Crée, prolonge ou coupe l\'accès de chaque booster avec une clé.', 'Create, extend or cut each booster\'s access with a key.'],
-  ['settings', 'Paramètres', 'Settings', 'Tes réglages (logo, bannière, couleurs, sons, profil) et ceux de l\'équipe (taux Eldorado, règles de partage, A2F, journal des erreurs).', 'Your settings (logo, banner, colors, sounds, profile) and team settings (Eldorado rate, split rules, 2FA, error log).'],
-  ['sparkles', 'Nouveautés', 'Update info', 'Les notes de mise à jour : nouveautés et corrections de chaque version.', 'Update notes: new features and fixes in each version.'],
+  ['home', 'Accueil', 'Home', 'Ce qu\'il faut faire maintenant (commandes à attribuer, à valider, en retard) et les chiffres du mois.', 'What needs doing now (orders to assign, to validate, late) and this month\'s numbers.'],
+  ['list', 'Commandes', 'Orders', 'Crée une commande (Ctrl+N), attribue-la, suis-la, valide-la quand elle est livrée. Les frais et les parts se calculent tout seuls. Les commandes Eldorado arrivent toutes seules grâce au bot.', 'Create an order (Ctrl+N), assign it, follow it, validate it once delivered. Fees and shares are calculated automatically. Eldorado orders arrive by themselves thanks to the bot.'],
+  ['send', 'Messages', 'Messages', 'Le salon Général, les messages privés et les annonces à l\'équipe.', 'The General room, private messages and announcements to the team.'],
+  ['wallet', 'Argent', 'Money', 'Solde et parts : écris l\'argent qu\'on a et ce que tu dois à chacun, le reste est à toi. Aussi : paiements aux boosters, retraits, Eldorado et calculateur.', 'Balance and shares: write the money we have and what you owe each person, the rest is yours. Also: payments to boosters, withdrawals, Eldorado and calculator.'],
+  ['bot', 'Bot', 'Bot', 'Les demandes de boosting d\'Eldorado, tes offres et tes tables de prix. Il peut envoyer les offres tout seul.', 'Eldorado boosting requests, your offers and your price tables. It can send offers by itself.'],
+  ['users', 'Équipe', 'Team', 'Tes boosters (dispo, gains, ce qui leur reste à recevoir), leurs licences, leurs profils et le classement du mois.', 'Your boosters (status, earnings, what they still have to receive), their licenses, their profiles and the monthly ranking.'],
+  ['settings', 'Paramètres', 'Settings', 'Tes réglages (couleur, logo, sons, profil) et ceux de l\'équipe (taux Eldorado, règles de partage, sécurité).', 'Your settings (color, logo, sounds, profile) and team settings (Eldorado rate, split rules, security).'],
 ];
 const GUIDE_BOOSTER = [
-  ['home', 'Accueil', 'Home', 'Tes commandes en cours, les annonces de Flowey et ta dispo (Disponible / Occupé / Absent). Garde-la toujours à jour.', 'Your current orders, Flowey\'s announcements and your status (Available / Busy / Away). Always keep it up to date.'],
-  ['list', 'Mes commandes', 'My orders', 'Les commandes qu\'on t\'a attribuées. Clique sur « Je commence » puis « J\'ai terminé ». Les accès du compte client sont dans la commande.', 'Orders assigned to you. Click "Start" then "I\'m done". The client\'s account access is inside the order.'],
-  ['dollar', 'Mes gains', 'My earnings', 'Ce que tu as gagné, ce que tu as déjà reçu et ce qu\'il te reste à recevoir. Indique aussi où recevoir tes paiements.', 'What you earned, already received and still have to receive. Also set where to receive your payments.'],
-  ['send', 'Messages', 'Messages', 'Le salon Général (toute l\'équipe) et les messages privés. Photos, fichiers, vocaux et émojis.', 'The General room (whole team) and private messages. Photos, files, voice messages and emojis.'],
-  ['users', 'Profils', 'Profiles', 'La carte de chaque membre de l\'équipe. Modifie la tienne en cliquant sur ta photo en bas à gauche.', 'Each team member\'s card. Edit yours by clicking your photo at the bottom left.'],
-  ['trophy', 'Wallet équipe', 'Team wallet', 'Le classement du mois et l\'objectif de l\'équipe.', 'The monthly ranking and the team goal.'],
-  ['settings', 'Paramètres', 'Settings', 'Personnalise ton app : logo, bannière, couleurs, taille, sons, notifications.', 'Customize your app: logo, banner, colors, size, sounds, notifications.'],
-  ['key', 'Ma licence', 'My license', 'La date de fin de ton accès. Colle ici une nouvelle clé si Flowey t\'en envoie une.', 'Your access end date. Paste a new key here if Flowey sends you one.'],
-  ['sparkles', 'Nouveautés', 'Update info', 'Les notes de mise à jour : nouveautés et corrections de chaque version.', 'Update notes: new features and fixes in each version.'],
+  ['home', 'Accueil', 'Home', 'Tes commandes en cours, les annonces de Flowey et ta dispo. Garde-la à jour.', 'Your current orders, Flowey\'s announcements and your status. Keep it up to date.'],
+  ['list', 'Mes commandes', 'My orders', 'Les commandes qu\'on t\'a données. Clique « Je commence » puis « J\'ai terminé ». Les accès du client sont dans la commande.', 'Orders given to you. Click "Start" then "I\'m done". The client\'s access is inside the order.'],
+  ['dollar', 'Mes gains', 'My earnings', 'Ce que tu as gagné, déjà reçu, et ce qu\'il te reste à recevoir. Indique aussi où recevoir tes paiements.', 'What you earned, already received, and still have to receive. Also set where to receive your payments.'],
+  ['send', 'Messages', 'Messages', 'Le salon Général et les messages privés.', 'The General room and private messages.'],
+  ['users', 'Équipe', 'Team', 'Les profils de l\'équipe et le classement du mois. Modifie ton profil en cliquant sur ta photo en bas à gauche.', 'Team profiles and the monthly ranking. Edit your profile by clicking your photo at the bottom left.'],
+  ['settings', 'Paramètres', 'Settings', 'Couleur, logo, taille, sons et ta licence.', 'Color, logo, size, sounds and your license.'],
 ];
 async function viewGuide(main) {
   const list = isAdmin() ? GUIDE_ADMIN : GUIDE_BOOSTER;
@@ -288,7 +280,7 @@ async function viewGuide(main) {
       L('Une mise à jour arrive ? Clique « Mettre à jour » : l\'app se ferme ~20 s et se rouvre toute seule.', 'An update is ready? Click "Update now": the app closes ~20 s and reopens by itself.'),
       L('Ne partage jamais ta clé de licence.', 'Never share your license key.')];
   main.innerHTML = `${head(L('Guide', 'Guide'), L('À quoi sert chaque onglet de l\'app', 'What each tab of the app is for'))}
-  <div class="guide-grid" data-noi18n>${list.map(([icon, fr, en, dfr, den], i) => `<div class="guide-card" style="animation-delay:${i * 35}ms">
+  <div class="guide-grid" data-noi18n>${list.map(([icon, fr, en, dfr, den]) => `<div class="guide-card">
     <div class="guide-ic">${ic(icon)}</div><div><h3>${esc(L(fr, en))}</h3><p>${esc(L(dfr, den))}</p></div></div>`).join('')}</div>
   <div class="card" data-noi18n><div class="card-head"><h2>${ic('sparkles')} ${esc(L('Astuces', 'Tips'))}</h2></div>
     <ul class="tips">${tips.map((t) => `<li>${esc(t)}</li>`).join('')}</ul></div>`;
@@ -298,6 +290,12 @@ async function viewGuide(main) {
    NOUVEAUTÉS : notes de mise à jour
    ===================================================================== */
 const CHANGELOG = [
+  ['3.9.0', '2026-10-10', [
+    ['new', 'Nouveau design : plus sobre, plus lisible, une seule couleur (or)', 'New design: calmer, easier to read, a single color (gold)'],
+    ['new', 'Menu simplifié : 8 entrées, les pages proches sont regroupées en onglets', 'Simpler menu: 8 entries, related pages grouped into tabs'],
+    ['new', 'Argent → Solde et parts : écris l\'argent qu\'on a et ce que tu dois à chacun, le reste est à toi', 'Money → Balance and shares: write the money we have and what you owe each person, the rest is yours'],
+    ['better', 'Les couleurs du logo et de la bannière ne s\'appliquent plus que si tu le demandes', 'Logo and banner colors now only apply if you ask for it'],
+  ]],
   ['3.8.0', '2026-10-10', [
     ['new', 'Onglet Bot : toutes les demandes de boosting et tes offres (envoyée, gagnée, perdue)', 'Bot tab: every boosting request and your offers (sent, won, lost)'],
     ['new', 'Proposer, modifier ou retirer une offre sur Eldorado depuis l\'app', 'Make, edit or withdraw an offer on Eldorado from the app'],
@@ -412,7 +410,7 @@ function whatsNew() {
 /* ---------------- préférences personnelles (propres à chaque PC) ---------------- */
 const LOW_END = (navigator.hardwareConcurrency || 8) <= 4;
 const PREF_DEFAULTS = {
-  accent: '', zoom: '1', corners: 'round', anim: true, effects: !LOW_END, bannerColors: true,
+  accent: '', zoom: '1', corners: 'round', anim: true, effects: !LOW_END, bannerColors: false, autoColors: false,
   sound: true, volume: 0.6, soundKind: 'chime', sOrder: true, sAnnounce: true, sMessage: true, sPayment: true, winNotif: true,
 };
 function prefs() {
@@ -512,13 +510,13 @@ function personalSettingsHtml() {
     <div class="card"><div class="card-head"><h2>Apparence</h2></div>
       <div class="form-grid">
         ${field('Couleur principale', `<div style="display:flex;gap:8px;align-items:center"><input type="color" data-change="pref" data-key="accent" value="${accent || '#5b8def'}" style="width:70px">
-          <button type="button" class="sm ${accent ? '' : 'primary'}" data-action="pref-accent-auto">Automatique</button></div>
-          <div class="muted small" style="margin-top:4px">${accent ? 'Couleur choisie à la main.' : 'Automatique : suit ton logo ou ta bannière.'}</div>`)}
+          <button type="button" class="sm" data-action="pref-accent-auto" ${accent ? '' : 'disabled'}>Couleur par défaut</button></div>
+          <div class="muted small" style="margin-top:4px">${accent ? 'Couleur choisie à la main.' : 'Or (couleur par défaut).'}</div>`)}
         ${field('Taille de l\'interface', `<select data-change="pref" data-key="zoom">${[['0.85', 'Petite'], ['1', 'Normale'], ['1.1', 'Grande'], ['1.25', 'Très grande']].map(([v, l]) => opt(v, l, String(p.zoom) === v)).join('')}</select>`)}
         ${field('Coins', `<select data-change="pref" data-key="corners">${opt('square', 'Carrés', p.corners === 'square')}${opt('round', 'Arrondis', p.corners === 'round')}${opt('extra', 'Très arrondis', p.corners === 'extra')}</select>`)}
         ${onOff('anim', 'Animations')}
-        ${onOff('effects', 'Effets visuels (halos, flous)', 'Désactive si ton PC rame.')}
-        ${onOff('bannerColors', 'Couleurs qui suivent la bannière')}
+        ${onOff('autoColors', 'Couleur tirée de mon logo', 'Remplace l\'or par la couleur principale de ton logo.')}
+        ${onOff('bannerColors', 'Couleur qui suit la bannière')}
         ${window.desktop && window.desktop.setGpu ? field('Accélération graphique', `<select data-change="gpu"><option value="1" ${S.gpu !== false ? 'selected' : ''}>Activée</option><option value="0" ${S.gpu === false ? 'selected' : ''}>Désactivée</option></select>
           <div class="muted small" style="margin-top:4px">Si l'app fait bugger ton PC : désactive (l'app redémarre).</div>`) : ''}
       </div></div>
@@ -1434,17 +1432,14 @@ async function onActivate(form, inShell) {
 
 /* ---------------- structure ---------------- */
 const NAV_ADMIN = [
-  ['Principal', [['dashboard', 'home', 'Tableau de bord'], ['orders', 'list', 'Commandes'], ['boosters', 'users', 'Équipe']]],
-  ['Communication', [['chat', 'send', 'Messages'], ['announcements', 'megaphone', 'Annonces'], ['profiles', 'users', 'Profils'], ['wallet', 'trophy', 'Wallet équipe']]],
-  ['Argent', [['eldorado', 'globe', 'Eldorado'], ['bot', 'bot', 'Bot'], ['withdrawals', 'wallet', 'Wallet Eldorado'], ['payments', 'send', 'Paiements']]],
-  ['Outils', [['calc', 'chart', 'Calculateur'], ['licenses', 'key', 'Licences'], ['settings', 'settings', 'Paramètres']]],
-  ['Aide', [['guide', 'book', 'Guide'], ['updates', 'sparkles', 'Nouveautés']]],
+  ['Activité', [['dashboard', 'home', 'Accueil'], ['orders', 'list', 'Commandes'], ['chat', 'send', 'Messages']]],
+  ['Gestion', [['balance', 'wallet', 'Argent'], ['bot', 'bot', 'Bot'], ['boosters', 'users', 'Équipe']]],
+  ['Réglages', [['settings', 'settings', 'Paramètres'], ['guide', 'book', 'Aide']]],
 ];
 const NAV_BOOSTER = [
-  ['Mon espace', [['home', 'home', 'Accueil'], ['myorders', 'list', 'Mes commandes'], ['earnings', 'dollar', 'Mes gains']]],
-  ['Équipe', [['chat', 'send', 'Messages'], ['profiles', 'users', 'Profils'], ['wallet', 'trophy', 'Wallet équipe']]],
-  ['Compte', [['mysettings', 'settings', 'Paramètres'], ['license', 'key', 'Ma licence']]],
-  ['Aide', [['guide', 'book', 'Guide'], ['updates', 'sparkles', 'Nouveautés']]],
+  ['Activité', [['home', 'home', 'Accueil'], ['myorders', 'list', 'Mes commandes'], ['earnings', 'dollar', 'Mes gains'], ['chat', 'send', 'Messages']]],
+  ['Équipe', [['profiles', 'users', 'Équipe']]],
+  ['Réglages', [['mysettings', 'settings', 'Paramètres'], ['guide', 'book', 'Aide']]],
 ];
 
 function renderShell(view) {
@@ -1482,8 +1477,8 @@ async function go(view, keepChat) {
   if (!keepChat) stopChat();
   closeModal();
   S.view = view;
-  document.querySelectorAll('.nav-item').forEach((b) => b.classList.toggle('active',
-    b.dataset.view === view || (view === 'order' && b.dataset.view === (isAdmin() ? 'orders' : 'myorders'))));
+  const owner = navOwner(view);
+  document.querySelectorAll('.nav-item').forEach((b) => b.classList.toggle('active', b.dataset.view === owner));
   const main = $('#main');
   // chaque page s'affiche dans son propre bloc : si on change de page avant la fin du chargement,
   // l'ancienne page ne vient plus écraser la nouvelle
@@ -1499,6 +1494,7 @@ async function go(view, keepChat) {
   if (!keepChat) main.scrollTop = 0;
   try {
     await VIEWS[view](box);
+    addSubtabs(box, view);
     box.classList.remove('stale');
     if (!cached) animateCounts(box);
     if (box.isConnected && !['chat', 'order'].includes(view)) S.viewCache[key] = box.innerHTML;
@@ -1513,7 +1509,7 @@ async function prefetchViews() {
   for (const v of list) {
     if (!S.access || (S.viewCache && S.viewCache[v]) || S.view === v) continue;
     const box = document.createElement('div');
-    try { await VIEWS[v](box); S.viewCache = S.viewCache || {}; S.viewCache[v] = box.innerHTML; } catch (_) { /* tant pis, elle se chargera au clic */ }
+    try { await VIEWS[v](box); addSubtabs(box, v); S.viewCache = S.viewCache || {}; S.viewCache[v] = box.innerHTML; } catch (_) { /* tant pis, elle se chargera au clic */ }
     await new Promise((r) => setTimeout(r, 300));
   }
 }
@@ -1630,8 +1626,8 @@ async function viewDashboard(main) {
   ${head('Bon retour, Flowey', `Voici où en est ton activité · ${n(st.doing) + n(st.assigned)} commande(s) en cours`, `<button class="primary" data-action="new-order">${ic('plus')} Nouvelle commande</button>`)}
   ${onboarding}
   ${!d.eldorado.real_at || (Date.now() - new Date(d.eldorado.real_at)) > 3 * 86400000 ? `<div class="notice">${ic('wallet')}
-    <div class="txt"><b>Relève ton solde Eldorado</b><div class="muted small">${d.eldorado.real_at ? 'Dernier relevé il y a plus de 3 jours.' : 'Aucun relevé pour l\'instant.'} Ça prend 5 secondes et ça garde la répartition juste.</div></div>
-    <button class="sm primary" data-action="nav" data-view="eldorado">Relever</button></div>` : ''}
+    <div class="txt"><b>Note ton solde</b><div class="muted small">${d.eldorado.real_at ? 'Dernier relevé il y a plus de 3 jours.' : 'Aucun relevé pour l\'instant.'} Ça prend 5 secondes et ça garde la répartition juste.</div></div>
+    <button class="sm primary" data-action="nav" data-view="balance">Écrire le solde</button></div>` : ''}
   <div class="todo">
     ${todo('À attribuer', 'inbox', 'À attribuer', st.todo, 'hot')}
     ${todo('Livrée', 'check', 'Livrées · à valider', st.delivered, 'hot')}
@@ -1661,7 +1657,7 @@ async function viewDashboard(main) {
   <details class="card"><summary>${ic('dollar')} Détails financiers <span class="muted small" style="font-weight:400">graphique de l'année · origine de ta part · bénéfice final</span></summary>
     <div class="grid-2">
       <div><div class="card-head"><h2>Année ${S.year}</h2>
-          <div class="legend"><span><i style="background:#6366f1"></i>Net</span><span><i style="background:#c084fc"></i>Ma part</span></div></div>
+          <div class="legend"><span><i style="background:var(--line-2)"></i>Net</span><span><i style="background:var(--accent)"></i>Ma part</span></div></div>
         <div class="bars">${d.year.map((y) => `<div class="bar-col ${y.m === S.month ? 'sel' : ''}" title="${MONTHS[y.m - 1]} : net ${money(y.net)} · ma part ${money(y.flowey)}">
           <div class="bar-pair"><div class="bar net" style="height:${(n(y.net) / maxBar) * 100}%"></div>
           <div class="bar me" style="height:${(n(y.flowey) / maxBar) * 100}%"></div></div>
@@ -2253,39 +2249,24 @@ async function viewEldorado(main) {
   const mine = r2(base - owed);
   const hasDesktop = !!(window.desktop && window.desktop.eldoradoOpen);
   const debts = d.boosters.map((b) => ({ ...b, rest: r2(n(b.earned) - n(b.paid)) })).filter((b) => b.rest > 0.004);
-  main.innerHTML = `${head('Eldorado', 'Ton compte Eldorado et la répartition de ton solde · toi seul as cet onglet')}
-  ${botMiniCard(botSt)}
+  main.innerHTML = `${head('Eldorado', 'Ton compte Eldorado, le bot et tes retraits')}
   <div class="grid-2">
-    <div class="card onboard"><div class="card-head"><h2>${ic('globe')} Ton compte Eldorado</h2></div>
-      <p>Ouvre Eldorado dans ton navigateur habituel (connexion et vérification normales).</p>
-      <div class="form-actions">
-        <button class="primary" data-action="eldorado-open" ${hasDesktop ? '' : 'disabled'}>${ic('external')} Ouvrir Eldorado</button></div>
-      <p class="muted small">${L('Le bot (onglet Bot) importe tes commandes tout seul via l\'API officielle.', 'The bot (Bot tab) imports your orders automatically through the official API.')}</p></div>
-    <form class="card" data-form="real-balance"><div class="card-head"><h2>${ic('refresh')} Relever mon solde</h2></div>
-      <p class="muted small">Tape le solde affiché sur Eldorado : l'app répartit tout de suite ce qui revient à chacun.</p>
-      <div class="form-grid">
-        ${field('Solde Eldorado ($)', `<input name="real" type="number" step="0.01" min="0" required value="${el.real != null ? el.real : ''}" placeholder="ex. 62.78">`)}
-        <div class="field" style="align-self:end"><button class="primary" type="submit">${ic('check')} Répartir</button></div>
+    <div class="card"><div class="card-head"><h2>${ic('globe')} Ton compte Eldorado</h2></div>
+      <p class="muted">Ouvre Eldorado dans ton navigateur habituel, avec ta connexion normale.</p>
+      <div class="form-actions"><button class="primary" data-action="eldorado-open" ${hasDesktop ? '' : 'disabled'}>${ic('external')} Ouvrir Eldorado</button></div></div>
+    ${botMiniCard(botSt)}
+  </div>
+  <div class="grid-2">
+    <div class="card"><div class="card-head"><h2>${ic('wallet')} Solde</h2></div>
+      <div class="chain">
+        <div class="row"><span>${el.real != null ? 'Solde noté' : 'Solde calculé'}</span><b>${money(base)}</b></div>
+        <div class="row"><span>Dû aux boosters</span><b>${money(owed)}</b></div>
+        <div class="row total"><span>À toi</span><b class="${mine < -0.004 ? 'red' : ''}">${money(mine)}</b></div>
       </div>
-      ${el.real != null ? `<p class="muted small">${L('Dernier relevé', 'Last record')} : <b>${money(el.real)}</b> ${L('le', 'on')} ${fdt(el.real_at)}</p>` : ''}</form>
-  </div>
-  <div class="kpis">
-    ${kpi(el.real != null ? 'Solde Eldorado (relevé)' : 'Solde Eldorado (calculé)', money(base), 'accent')}
-    ${kpi('À verser aux boosters', money(owed), owed > 0.004 ? 'warn' : 'good')}
-    ${kpi('À toi dans ce solde', money(mine), mine < -0.004 ? 'bad' : 'good')}
-    ${kpi('Écart relevé / calculé', el.real != null ? money(r2(n(el.real) - n(el.balance))) : '—', el.real != null && Math.abs(n(el.real) - n(el.balance)) >= 0.005 ? 'warn' : '')}
-  </div>
-  <div class="grid-2">
-    <div class="card"><div class="card-head"><h2>${ic('users')} Qui attend son argent</h2></div>
-      ${debts.length ? `<div class="chain">${debts.map((b) => `<div class="row"><span style="display:flex;gap:8px;align-items:center">${avatarHtml(b.name, 'sm')}<b>${esc(b.name)}</b>
-        <span class="muted small">${b.payout_details ? esc(b.payout_method || '') : 'coordonnées non renseignées'}</span></span>
-        <span style="display:flex;gap:8px;align-items:center"><b class="red">${money(b.rest)}</b>
-        <button class="sm primary" data-action="pay" data-id="${b.id}" data-amount="${b.rest}">${ic('send')} Payer</button></span></div>`).join('')}</div>`
-    : emptyBox('Tout le monde est payé.', 'check')}</div>
+      <div class="form-actions"><button data-action="nav" data-view="balance">${ic('edit')} Écrire le solde et les parts</button></div></div>
     <div class="card"><div class="card-head"><h2>${ic('download')} Tu as fait un retrait ?</h2></div>
-      <p class="muted">Après un retrait sur Eldorado, note-le pour que le solde et ta part restent justes.</p>
-      <div class="form-actions"><button data-action="nav" data-view="withdrawals">${ic('wallet')} Noter un retrait</button></div>
-      <p class="muted small">Pour payer un booster : retire l'argent sur ton PayPal/Skrill, envoie-lui sa part, puis clique « Payer » ici.</p></div>
+      <p class="muted">Note chaque retrait fait sur Eldorado pour que le solde reste juste.</p>
+      <div class="form-actions"><button data-action="nav" data-view="withdrawals">${ic('wallet')} Noter un retrait</button></div></div>
   </div>`;
 }
 
@@ -3056,8 +3037,9 @@ const CHANGES = {
     setPref(k, v);
     if (k === 'accent') applyTheme(S.currentTheme);
     if (k === 'bannerColors' || k === 'effects') initBanner();
+    if (k === 'autoColors') applyTheme(S.baseTheme);
     if (k === 'soundKind' || k === 'volume') playSound(null, true);
-    if (['accent', 'bannerColors', 'effects'].includes(k)) refresh();
+    if (['accent', 'bannerColors', 'effects', 'autoColors'].includes(k)) refresh();
   },
   gpu: (el) => {
     if (!confirm('L\'app va redémarrer pour appliquer ce réglage. Continuer ?')) { el.value = S.gpu === false ? '0' : '1'; return; }
@@ -3484,6 +3466,165 @@ document.addEventListener('input', (e) => {
   if (fo) { updateOfferForm(fo, e.target); return; }
   const fp = e.target.closest && e.target.closest('form[data-form="bot-profile"]');
   if (fp && e.target.name !== 'ai_text') updateProfileTry(fp, e.target.name === 'ranks');
+});
+
+/* =====================================================================
+   SOLDE ET PARTS — Flowey écrit l'argent qu'on a et ce qu'il doit à chacun.
+   Les écarts avec le calcul de l'app deviennent des « corrections » visibles
+   par le booster concerné ; le reste du solde est la part de Flowey.
+   ===================================================================== */
+async function viewBalance(main) {
+  const [d, checks] = await Promise.all([
+    run(sb.rpc('admin_dashboard', { p_year: S.year, p_month: S.month })),
+    sb.from('balance_checks').select('*').order('created_at', { ascending: false }).limit(12).then((r) => (r.error ? null : r.data || []), () => null),
+  ]);
+  S.dash = d;
+  const el = d.eldorado;
+  const people = d.boosters.map((b) => ({ id: b.id, name: b.name, active: b.active, rest: r2(n(b.earned) - n(b.paid)), payout: b.payout_details ? b.payout_method : '' }))
+    .filter((b) => b.active || Math.abs(b.rest) >= 0.005);
+  const last = checks && checks[0];
+  const startBalance = el.real != null ? n(el.real) : n(el.balance);
+  S.ledger = { people };
+  const rows = people.map((b) => `<tr data-id="${b.id}"><td><span class="who-cell">${avatarHtml(b.name, 'sm')}<b>${esc(b.name)}</b></span>
+      ${b.active ? '' : ` <span class="muted small">${L('(inactif)', '(inactive)')}</span>`}</td>
+    <td class="num muted">${money(b.rest)}</td>
+    <td class="num"><input name="owe_${b.id}" type="number" step="0.01" value="${b.rest}" data-before="${b.rest}"><div class="diff muted" data-diff="${b.id}"></div></td>
+    <td class="actions">${b.rest > 0.004 ? `<button type="button" class="sm" data-action="pay" data-id="${b.id}" data-amount="${b.rest}">${ic('send')} ${L('Payer', 'Pay')}</button>` : ''}</td></tr>`).join('');
+  main.innerHTML = `${head(L('Solde et parts', 'Balance and shares'), L('Écris l\'argent qu\'on a et ce que tu dois à chacun. Ce qui reste est à toi.', 'Write the money we have and what you owe each person. The rest is yours.'))}
+  <form class="card" data-form="balance-check">
+    <div class="balance-hero">
+      <div><label>${L('Argent qu\'on a en tout ($)', 'Money we have in total ($)')}</label>
+        <div class="big"><input name="balance" type="number" step="0.01" min="0" required value="${startBalance}"></div></div>
+      <div class="muted small" style="max-width:420px">${L('En général : ton solde Eldorado. Ajoute l\'argent déjà retiré mais pas encore donné aux boosters.', 'Usually: your Eldorado balance. Add money already withdrawn but not yet given to boosters.')}
+        ${el.real != null ? `<br>${L('Dernier solde noté', 'Last balance noted')} : <b>${money(el.real)}</b> (${fdt(el.real_at)}) · ${L('calculé par l\'app', 'computed by the app')} : <b>${money(el.balance)}</b>` : `<br>${L('Calculé par l\'app', 'Computed by the app')} : <b>${money(el.balance)}</b>`}</div>
+    </div>
+    <div class="split-bar" id="split-bar"></div>
+    <div class="split-legend" id="split-legend"></div>
+    <div class="table-wrap ledger" style="margin-top:16px"><table>
+      <thead><tr><th>${L('Personne', 'Person')}</th><th class="num">${L('D\'après l\'app', 'According to the app')}</th><th class="num">${L('Ce que je lui dois', 'What I owe them')}</th><th></th></tr></thead>
+      <tbody>${rows || `<tr><td colspan="4" class="muted">${L('Aucun booster.', 'No booster.')}</td></tr>`}
+        <tr class="me total"><td><span class="who-cell">${avatarHtml('Flowey', 'sm')}<b>${L('Toi (Flowey)', 'You (Flowey)')}</b></span></td>
+          <td class="num muted">—</td><td class="num"><b id="ledger-me" style="font-size:16px"></b></td><td class="muted small">${L('= argent − parts', '= money − shares')}</td></tr>
+      </tbody></table></div>
+    <div id="ledger-warn"></div>
+    <div class="form-grid" style="margin-top:16px">
+      ${field(L('Note (facultatif)', 'Note (optional)'), `<input name="note" maxlength="200" placeholder="${esc(L('ex. après le retrait Skrill du 10/10', 'e.g. after the Skrill withdrawal'))}">`, 'class="field span-2"')}
+      <div class="field span-2" style="align-self:end"><label class="check" style="display:flex;gap:8px;align-items:flex-start;margin:0"><input type="checkbox" name="is_eldorado" checked>
+        <span>${L('Ce montant est mon solde Eldorado actuel', 'This amount is my current Eldorado balance')}</span></label></div>
+    </div>
+    <div class="form-actions"><button class="primary" type="submit">${ic('check')} ${L('Enregistrer', 'Save')}</button>
+      <button type="button" class="ghost" data-action="ledger-reset">${L('Remettre les montants de l\'app', 'Reset to the app\'s amounts')}</button></div>
+    <p class="muted small">${L('Si tu changes ce que tu dois à quelqu\'un, l\'app enregistre une « correction du solde » : le booster la voit dans ses gains, et tout le reste se recalcule.', 'If you change what you owe someone, the app records a "balance correction": the booster sees it in their earnings, and everything else is recalculated.')}</p>
+  </form>
+  <div class="card"><div class="card-head"><h2>${ic('clock')} ${L('Historique', 'History')}</h2></div>
+    ${checks === null ? `<div class="warn-box">${L('L\'historique sera disponible après le SQL de la mise à jour 3.9 (voir le message de Claude).', 'History will be available after the 3.9 SQL update.')}</div>`
+    : checks.length ? `<div class="table-wrap"><table><thead><tr><th>${L('Date', 'Date')}</th><th class="num">${L('Argent', 'Money')}</th><th>${L('Parts', 'Shares')}</th><th class="num">${L('Toi', 'You')}</th><th>${L('Note', 'Note')}</th></tr></thead><tbody>
+      ${checks.map((c) => `<tr><td class="muted">${fdt(c.created_at)}</td><td class="num">${money(c.balance)}</td>
+        <td class="small">${(c.lines || []).filter((x) => Math.abs(n(x.owed)) >= 0.005).map((x) => `${esc(x.name)} ${money(x.owed)}`).join(', ') || '—'}</td>
+        <td class="num"><b>${money(c.flowey)}</b></td><td class="muted small">${esc(c.note || '')}</td></tr>`).join('')}</tbody></table></div>`
+    : emptyBox(L('Rien d\'enregistré pour l\'instant.', 'Nothing saved yet.'), 'clock')}</div>`;
+  const f = main.querySelector('form[data-form="balance-check"]');
+  if (f) updateLedger(f);
+}
+const LEDGER_COLORS = ['#7aa2d6', '#5fbf8f', '#c98bb9', '#e0925a', '#8fa3b0', '#b8a76a'];
+function updateLedger(f) {
+  const bal = n(f.elements.balance.value);
+  const people = (S.ledger && S.ledger.people) || [];
+  let sum = 0;
+  const parts = people.map((b, i) => {
+    const inp = f.elements['owe_' + b.id];
+    const v = inp ? n(inp.value) : 0;
+    sum += v;
+    const d = r2(v - b.rest);
+    const box = f.querySelector(`[data-diff="${b.id}"]`);
+    if (box) box.textContent = Math.abs(d) >= 0.005 ? `${d > 0 ? '+' : ''}${money(d)} ${L('de correction', 'correction')}` : '';
+    return { name: b.name, v, color: LEDGER_COLORS[i % LEDGER_COLORS.length] };
+  });
+  const me = r2(bal - sum);
+  const meEl = f.querySelector('#ledger-me');
+  if (meEl) { meEl.textContent = money(me); meEl.className = me < -0.004 ? 'red' : ''; }
+  const total = Math.max(bal, sum, 0.01);
+  const segs = [...parts.filter((p) => p.v > 0), { name: L('Toi', 'You'), v: Math.max(0, me), color: 'var(--accent)' }];
+  const bar = f.querySelector('#split-bar');
+  if (bar) bar.innerHTML = segs.map((p) => `<span style="width:${(p.v / total) * 100}%;background:${p.color}" title="${esc(p.name)} ${money(p.v)}"></span>`).join('');
+  const lg = f.querySelector('#split-legend');
+  if (lg) lg.innerHTML = segs.map((p) => `<span><i style="background:${p.color}"></i>${esc(p.name)} ${money(p.v)}</span>`).join('');
+  const w = f.querySelector('#ledger-warn');
+  if (w) w.innerHTML = me < -0.004 ? `<div class="warn-box">${L(`Tu dois ${money(-me)} de plus que l'argent qu'on a. Vérifie le montant total ou les parts.`, `You owe ${money(-me)} more than the money we have. Check the total or the shares.`)}</div>` : '';
+}
+async function saveLedger(f, sub) {
+  const o = formData(f);
+  const bal = r2(n(o.balance));
+  const people = (S.ledger && S.ledger.people) || [];
+  const lines = people.map((b) => ({ booster_id: b.id, name: b.name, before: b.rest, owed: r2(n(o['owe_' + b.id])) }));
+  const changes = lines.filter((x) => Math.abs(x.owed - x.before) >= 0.005);
+  const flowey = r2(bal - lines.reduce((t, x) => t + x.owed, 0));
+  const msg = changes.length
+    ? L(`Enregistrer ? ${changes.length} correction(s) : ${changes.map((x) => `${x.name} ${money(x.before)} → ${money(x.owed)}`).join(', ')}. Ta part : ${money(flowey)}.`,
+      `Save? ${changes.length} correction(s): ${changes.map((x) => `${x.name} ${money(x.before)} → ${money(x.owed)}`).join(', ')}. Your share: ${money(flowey)}.`)
+    : L(`Enregistrer ? Aucune correction. Ta part : ${money(flowey)}.`, `Save? No correction. Your share: ${money(flowey)}.`);
+  if (!confirm(msg)) return;
+  if (sub) sub.disabled = true;
+  try {
+    if (changes.length) {
+      await run(sb.from('adjustments').insert(changes.map((x) => ({ booster_id: x.booster_id, amount: r2(x.owed - x.before), label: L('Correction du solde', 'Balance correction'), kind: 'correction', adj_date: today() }))));
+    }
+    if (o.is_eldorado) await run(sb.from('app_settings').update({ eldorado_balance: bal, eldorado_balance_at: new Date().toISOString() }).eq('id', 1));
+    const { error } = await sb.from('balance_checks').insert({ balance: bal, flowey, lines, note: o.note || null });
+    S.dash = null;
+    toast(error ? L('Corrections enregistrées (historique indisponible : lance le SQL 3.9)', 'Corrections saved (history unavailable: run the 3.9 SQL)') : L('Solde et parts enregistrés', 'Balance and shares saved'), error ? 'error' : 'ok');
+    refresh();
+  } catch (e) {
+    const m = errMsg(e);
+    toast(/kind|column|balance_checks|schema cache/i.test(m) ? L('Lance d\'abord le SQL de la mise à jour 3.9 dans Supabase (voir le message de Claude).', 'Run the 3.9 SQL update in Supabase first.') : m, 'error');
+    if (sub) sub.disabled = false;
+  }
+}
+
+/* ---------------- menu : sections et onglets ---------------- */
+const SUBTABS_ADMIN = {
+  chat: [['chat', 'Messages'], ['announcements', 'Annonces']],
+  balance: [['balance', 'Solde et parts'], ['payments', 'Paiements'], ['withdrawals', 'Retraits'], ['eldorado', 'Eldorado'], ['calc', 'Calculateur']],
+  boosters: [['boosters', 'Boosters'], ['licenses', 'Licences'], ['profiles', 'Profils'], ['wallet', 'Classement']],
+  guide: [['guide', 'Guide'], ['updates', 'Nouveautés']],
+};
+const SUBTABS_BOOSTER = {
+  profiles: [['profiles', 'Profils'], ['wallet', 'Classement']],
+  mysettings: [['mysettings', 'Paramètres'], ['license', 'Ma licence']],
+  guide: [['guide', 'Guide'], ['updates', 'Nouveautés']],
+};
+function navOwner(view) {
+  if (view === 'order') return isAdmin() ? 'orders' : 'myorders';
+  const map = isAdmin() ? SUBTABS_ADMIN : SUBTABS_BOOSTER;
+  for (const [owner, tabs] of Object.entries(map)) if (tabs.some(([v]) => v === view)) return owner;
+  return view;
+}
+function addSubtabs(box, view) {
+  const owner = navOwner(view);
+  const tabs = (isAdmin() ? SUBTABS_ADMIN : SUBTABS_BOOSTER)[owner];
+  if (!tabs || view === 'order') return;
+  const nav = isAdmin() ? NAV_ADMIN : NAV_BOOSTER;
+  let label = '';
+  nav.forEach(([, items]) => items.forEach(([id, , lab]) => { if (id === owner) label = lab; }));
+  const ph = box.querySelector('.page-head');
+  const h1 = ph && ph.querySelector('h1');
+  if (h1 && label) h1.textContent = label;
+  const html = `<div class="subtabs">${tabs.map(([v, lab]) => `<button class="${v === view ? 'on' : ''}" data-action="nav" data-view="${v}">${esc(lab)}</button>`).join('')}</div>`;
+  if (ph) ph.insertAdjacentHTML('afterend', html); else box.insertAdjacentHTML('afterbegin', html);
+}
+
+Object.assign(VIEWS, { balance: viewBalance });
+Object.assign(ACTIONS, {
+  'ledger-reset': (el) => {
+    const f = el.closest('form');
+    (S.ledger.people || []).forEach((b) => { const i = f.elements['owe_' + b.id]; if (i) i.value = b.rest; });
+    updateLedger(f);
+  },
+});
+Object.assign(FORMS, { 'balance-check': (f, sub) => saveLedger(f, sub) });
+document.addEventListener('input', (e) => {
+  const f = e.target.closest && e.target.closest('form[data-form="balance-check"]');
+  if (f) updateLedger(f);
 });
 
 document.addEventListener('click', (e) => {
