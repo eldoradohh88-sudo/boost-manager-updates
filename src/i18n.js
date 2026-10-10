@@ -325,3 +325,14 @@ Object.assign(window.I18N_EN, {
   "Le bot Eldorado (plus bas) importe tes commandes tout seul via l'API officielle.": 'The Eldorado bot (below) imports your orders automatically through the official API.',
   'Nouvelle commande Eldorado': 'New Eldorado order', 'Demande de boosting Eldorado': 'Eldorado boosting request', 'Commande annulée sur Eldorado': 'Order cancelled on Eldorado',
 });
+
+// bot (v3.8) : raisons renvoyées par le bot
+Object.assign(window.I18N_EN, {
+  'Eldorado ne donne pas les rangs : offre à faire à la main': 'Eldorado gives no ranks: make the offer by hand',
+  'Aucune table de prix pour ce jeu / cette catégorie': 'No price table for this game / category',
+  'Le client veut du duo (ta table est en solo only)': 'The buyer wants duo (your table is solo only)',
+  'Client masqué (mute)': 'Buyer muted',
+  'Prix à 0 : complète ta table de prix': 'Price is 0: complete your price table',
+  'Offre retirée': 'Offer withdrawn',
+  'Bot': 'Bot',
+});

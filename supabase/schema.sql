@@ -1240,6 +1240,52 @@ alter table public.bot_secrets enable row level security;
 revoke all on public.bot_secrets from anon, authenticated;
 
 -- ---------------------------------------------------------------------
+-- BOT ELDORADO v3.8 : offres automatiques, tables de prix
+-- ---------------------------------------------------------------------
+alter table public.app_settings add column if not exists bot_auto_offers boolean not null default false;
+alter table public.app_settings add column if not exists bot_auto_since timestamptz;
+alter table public.eldorado_requests add column if not exists raw          jsonb;
+alter table public.eldorado_requests add column if not exists category_id  text;
+alter table public.eldorado_requests add column if not exists detected     jsonb;
+alter table public.eldorado_requests add column if not exists profile_id   uuid;
+alter table public.eldorado_requests add column if not exists offer_id     uuid;
+alter table public.eldorado_requests add column if not exists offer_price  numeric(10,2);
+alter table public.eldorado_requests add column if not exists offer_delivery text;
+alter table public.eldorado_requests add column if not exists offer_message  text;
+alter table public.eldorado_requests add column if not exists offer_state  text;
+alter table public.eldorado_requests add column if not exists offer_auto   boolean;
+alter table public.eldorado_requests add column if not exists offer_at     timestamptz;
+alter table public.eldorado_requests add column if not exists offer_error  text;
+alter table public.eldorado_requests add column if not exists skip_reason  text;
+
+create table if not exists public.bot_price_profiles (
+  id               uuid primary key default gen_random_uuid(),
+  name             text not null default 'Ma table',
+  game_id          text,                 -- vide = tous les jeux
+  category_match   text,                 -- vide = toutes les catégories (sinon : le titre doit contenir ce texte)
+  active           boolean not null default true,
+  auto_send        boolean not null default true,
+  ranks            jsonb not null default '[]'::jsonb,  -- [{ "name": "Gold 1", "price": 4 }] : prix pour monter AU rang depuis le précédent
+  solo_only        boolean not null default false,
+  duo_mult         numeric(6,2) not null default 1.5,
+  min_price        numeric(10,2) not null default 0,
+  max_price        numeric(10,2) not null default 0,     -- 0 = pas de plafond
+  base_price       numeric(10,2) not null default 0,     -- prix si les rangs ne sont pas connus
+  auto_when_unknown boolean not null default false,
+  delivery         text not null default 'Day2',
+  message          text,
+  notes            text,
+  created_at       timestamptz not null default now(),
+  updated_at       timestamptz not null default now()
+);
+alter table public.bot_price_profiles enable row level security;
+drop policy if exists admin_all on public.bot_price_profiles;
+create policy admin_all on public.bot_price_profiles for all using (public.is_admin()) with check (public.is_admin());
+
+-- plus aucune notification pour les demandes de boosting
+delete from public.notifications where title = 'Demande de boosting Eldorado';
+
+-- ---------------------------------------------------------------------
 -- DROITS : toutes les fonctions de l'app utilisables par les comptes connectés
 -- (chaque fonction vérifie elle-même la licence / le rôle admin)
 -- ---------------------------------------------------------------------

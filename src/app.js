@@ -139,6 +139,7 @@ const ICONS = {
   clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
   alert: '<path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/>',
   inbox: '<path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.5 5h13L22 12v6a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-6z"/>',
+  bot: '<rect x="4" y="8" width="16" height="12" rx="3"/><path d="M12 4v4M9 13.5h.01M15 13.5h.01M9.5 17h5M2 13v3M22 13v3"/><circle cx="12" cy="3.5" r="1"/>',
   rocket: '<path d="M4.5 16.5c-1.5 1.3-2 5-2 5s3.7-.5 5-2c.7-.8.7-2.1-.1-2.9a2.2 2.2 0 0 0-2.9-.1z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.9A12.9 12.9 0 0 1 22 2c0 2.7-.8 7.5-6 11a22.4 22.4 0 0 1-4 2z"/><path d="M9 12H4s.6-3 2-4c1.6-1.1 5 0 5 0M12 15v5s3-.6 4-2c1.1-1.6 0-5 0-5"/>',
   dollar: '<path d="M12 2v20"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',
   chart: '<path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/>',
@@ -189,7 +190,7 @@ try { LANG = localStorage.getItem('bm_lang') === 'en' ? 'en' : 'fr'; } catch (_)
 const EN = () => LANG === 'en';
 const L = (fr, en) => (EN() ? en : fr); // texte selon la langue (pour les textes longs écrits dans les deux langues)
 // contenus écrits par l'équipe (messages, bios, annonces…) : jamais traduits
-const NO_I18N = '[data-noi18n], textarea, script, style, .txt, .pbio, .ann .b, .ann .h, .tchat-who, .who-cell, .pname, .ptag, .chip, code';
+const NO_I18N = '[data-noi18n], textarea, script, style, .txt, .pbio, .ann .b, .ann .h, .tchat-who, .who-cell, .pname, .ptag, .chip, code, .raw-json';
 function trText(t) {
   const k = t.trim();
   if (!k || !window.I18N_EN) return null;
@@ -257,6 +258,7 @@ const GUIDE_ADMIN = [
   ['users', 'Profils', 'Profiles', 'La carte de chaque membre : photo, bannière, bio, jeux, Discord. Clique sur quelqu\'un pour voir son profil.', 'Each member\'s card: photo, banner, bio, games, Discord. Click someone to see their profile.'],
   ['trophy', 'Wallet équipe', 'Team wallet', 'Le classement du mois et l\'objectif de l\'équipe.', 'The monthly ranking and the team goal.'],
   ['globe', 'Eldorado', 'Eldorado', 'Ouvre ton compte Eldorado et note ton solde : l\'app te dit ce qui est à toi et ce qui revient aux boosters. Toi seul as cet onglet.', 'Open your Eldorado account and record your balance: the app tells you what is yours and what belongs to boosters. Only you have this tab.'],
+  ['bot', 'Bot', 'Bot', 'Les demandes de boosting d\'Eldorado, tes offres (envoyées, gagnées, perdues) et tes tables de prix. Crée une table avec l\'assistant en expliquant avec tes mots, puis active les offres automatiques.', 'Eldorado boosting requests, your offers (sent, won, lost) and your price tables. Build a table with the assistant in your own words, then turn on automatic offers.'],
   ['wallet', 'Wallet Eldorado', 'Eldorado wallet', 'Note chaque retrait fait sur Eldorado (et ses frais) pour garder des comptes justes.', 'Record every withdrawal made on Eldorado (and its fees) to keep accurate accounts.'],
   ['dollar', 'Paiements', 'Payments', 'Note chaque paiement envoyé à un booster : son « reste à payer » se met à jour et il est notifié.', 'Record each payment sent to a booster: their "left to pay" updates and they get notified.'],
   ['chart', 'Calculateur', 'Calculator', 'Ce que touche chacun pour un prix donné, et le prix minimum à afficher sur Eldorado.', 'What everyone gets for a given price, and the minimum price to show on Eldorado.'],
@@ -296,6 +298,14 @@ async function viewGuide(main) {
    NOUVEAUTÉS : notes de mise à jour
    ===================================================================== */
 const CHANGELOG = [
+  ['3.8.0', '2026-10-10', [
+    ['new', 'Onglet Bot : toutes les demandes de boosting et tes offres (envoyée, gagnée, perdue)', 'Bot tab: every boosting request and your offers (sent, won, lost)'],
+    ['new', 'Proposer, modifier ou retirer une offre sur Eldorado depuis l\'app', 'Make, edit or withdraw an offer on Eldorado from the app'],
+    ['new', 'Tables de prix par rang, avec solo only, multiplicateur duo, prix mini et maxi', 'Price tables per rank, with solo only, duo multiplier, min and max price'],
+    ['new', 'Assistant : explique avec tes mots, il propose la table de prix', 'Assistant: explain in your own words, it suggests the price table'],
+    ['new', 'Offres automatiques envoyées par le bot dès qu\'une demande arrive', 'Automatic offers sent by the bot as soon as a request comes in'],
+    ['better', 'Plus aucune notification pour les demandes de boosting', 'No more notifications for boosting requests'],
+  ]],
   ['3.7.0', '2026-10-09', [
     ['new', 'Bot Eldorado : les nouvelles commandes arrivent toutes seules dans l\'app (API officielle)', 'Eldorado bot: new orders arrive in the app by themselves (official API)'],
     ['new', 'Alerte à chaque nouvelle demande de boosting (app + Discord)', 'Alert on every new boosting request (app + Discord)'],
@@ -1426,7 +1436,7 @@ async function onActivate(form, inShell) {
 const NAV_ADMIN = [
   ['Principal', [['dashboard', 'home', 'Tableau de bord'], ['orders', 'list', 'Commandes'], ['boosters', 'users', 'Équipe']]],
   ['Communication', [['chat', 'send', 'Messages'], ['announcements', 'megaphone', 'Annonces'], ['profiles', 'users', 'Profils'], ['wallet', 'trophy', 'Wallet équipe']]],
-  ['Argent', [['eldorado', 'globe', 'Eldorado'], ['withdrawals', 'wallet', 'Wallet Eldorado'], ['payments', 'send', 'Paiements']]],
+  ['Argent', [['eldorado', 'globe', 'Eldorado'], ['bot', 'bot', 'Bot'], ['withdrawals', 'wallet', 'Wallet Eldorado'], ['payments', 'send', 'Paiements']]],
   ['Outils', [['calc', 'chart', 'Calculateur'], ['licenses', 'key', 'Licences'], ['settings', 'settings', 'Paramètres']]],
   ['Aide', [['guide', 'book', 'Guide'], ['updates', 'sparkles', 'Nouveautés']]],
 ];
@@ -2222,37 +2232,19 @@ async function botCall(action, extra = {}) {
   }
   return data;
 }
-function botCard(st, reqs) {
-  const last = st && st.eldorado_bot_last_sync;
-  const err = st && st.eldorado_bot_error;
+function botMiniCard(st) {
+  const last = st && st.eldorado_bot_last_sync; const err = st && st.eldorado_bot_error;
   const ok = last && !err && Date.now() - new Date(last) < 10 * 60000;
-  return `<div class="card"><div class="card-head"><h2>${ic('rocket')} Bot Eldorado</h2>
-      <span class="badge ${ok ? 'b-green' : err ? 'b-red' : 'b-grey'}">${ok ? 'Actif' : err ? 'Erreur' : 'Pas encore lancé'}</span></div>
-    <p class="muted small">Toutes les 2 minutes, il importe tes nouvelles commandes Eldorado dans l'app et te prévient des nouvelles demandes de boosting. Il tourne sur Supabase, même PC éteint.</p>
-    <div class="chain">
-      <div class="row"><span>Dernière synchro</span><b>${last ? fdt(last) : '—'}</b></div>
-      <div class="row"><span>Statut Eldorado</span><b>${st && st.eldorado_online === true ? '<span class="green">En ligne</span>' : st && st.eldorado_online === false ? 'Hors ligne' : '—'}</b></div>
-    </div>
+  return `<div class="card"><div class="card-head"><h2>${ic('bot')} ${L('Bot Eldorado', 'Eldorado bot')}</h2>
+      <span class="badge ${ok ? 'b-green' : err ? 'b-red' : 'b-grey'}">${ok ? L('Actif', 'Active') : err ? L('Erreur', 'Error') : L('Pas encore lancé', 'Not started yet')}</span></div>
+    <p class="muted small">${L('Commandes importées toutes seules, demandes de boosting, offres et tables de prix : tout est dans l\'onglet Bot.', 'Orders imported automatically, boosting requests, offers and price tables: it\'s all in the Bot tab.')}${last ? ` ${L('Dernière synchro', 'Last sync')} : ${fdt(last)}.` : ''}</p>
     ${err ? `<div class="error-box">${esc(err)}</div>` : ''}
-    <div class="form-actions">
-      <button class="primary" data-action="bot" data-bot="sync">${ic('refresh')} Synchroniser maintenant</button>
-      <button data-action="bot" data-bot="test">${ic('check')} Tester la connexion</button>
-      <button data-action="bot" data-bot="online">En ligne</button>
-      <button data-action="bot" data-bot="offline">Hors ligne</button>
-    </div>
-    <h3 style="margin-top:18px">Demandes de boosting actives</h3>
-    ${reqs.length ? `<div class="chain">${reqs.map((r) => `<div class="row"><span><b>${esc(r.category || 'Boost')}</b>${r.game_id ? ` <span class="muted small">· ${esc(r.game_id)}</span>` : ''}${r.buyer ? ` <span class="muted small">· ${esc(r.buyer)}</span>` : ''}</span>
-      <span class="muted small">${fdt(r.created_date || r.seen_at)}</span></div>`).join('')}</div>
-      <p class="muted small">Réponds-leur sur Eldorado (onglet des demandes de boosting).</p>`
-    : emptyBox('Aucune demande active pour l\'instant.', 'inbox')}</div>`;
+    <div class="form-actions"><button class="primary" data-action="nav" data-view="bot">${ic('bot')} ${L('Ouvrir le bot', 'Open the bot')}</button></div></div>`;
 }
 
 async function viewEldorado(main) {
-  let botSt = null; let botReqs = [];
-  await Promise.all([
-    sb.from('app_settings').select('eldorado_bot_last_sync, eldorado_bot_error, eldorado_online').eq('id', 1).maybeSingle().then((r) => { botSt = r.data; }, () => {}),
-    sb.from('eldorado_requests').select('*').eq('active', true).order('created_date', { ascending: false }).limit(20).then((r) => { botReqs = r.data || []; }, () => {}),
-  ]);
+  let botSt = null;
+  await sb.from('app_settings').select('eldorado_bot_last_sync, eldorado_bot_error').eq('id', 1).maybeSingle().then((r) => { botSt = r.data; }, () => {});
   const d = await run(sb.rpc('admin_dashboard', { p_year: S.year, p_month: S.month }));
   S.dash = d;
   const el = d.eldorado;
@@ -2262,20 +2254,20 @@ async function viewEldorado(main) {
   const hasDesktop = !!(window.desktop && window.desktop.eldoradoOpen);
   const debts = d.boosters.map((b) => ({ ...b, rest: r2(n(b.earned) - n(b.paid)) })).filter((b) => b.rest > 0.004);
   main.innerHTML = `${head('Eldorado', 'Ton compte Eldorado et la répartition de ton solde · toi seul as cet onglet')}
-  ${botCard(botSt, botReqs)}
+  ${botMiniCard(botSt)}
   <div class="grid-2">
     <div class="card onboard"><div class="card-head"><h2>${ic('globe')} Ton compte Eldorado</h2></div>
       <p>Ouvre Eldorado dans ton navigateur habituel (connexion et vérification normales).</p>
       <div class="form-actions">
         <button class="primary" data-action="eldorado-open" ${hasDesktop ? '' : 'disabled'}>${ic('external')} Ouvrir Eldorado</button></div>
-      <p class="muted small">Le bot Eldorado (plus bas) importe tes commandes tout seul via l'API officielle.</p></div>
+      <p class="muted small">${L('Le bot (onglet Bot) importe tes commandes tout seul via l\'API officielle.', 'The bot (Bot tab) imports your orders automatically through the official API.')}</p></div>
     <form class="card" data-form="real-balance"><div class="card-head"><h2>${ic('refresh')} Relever mon solde</h2></div>
       <p class="muted small">Tape le solde affiché sur Eldorado : l'app répartit tout de suite ce qui revient à chacun.</p>
       <div class="form-grid">
         ${field('Solde Eldorado ($)', `<input name="real" type="number" step="0.01" min="0" required value="${el.real != null ? el.real : ''}" placeholder="ex. 62.78">`)}
         <div class="field" style="align-self:end"><button class="primary" type="submit">${ic('check')} Répartir</button></div>
       </div>
-      ${el.real != null ? `<p class="muted small">Dernier relevé : <b>${money(el.real)}</b> le ${fdt(el.real_at)}</p>` : ''}</form>
+      ${el.real != null ? `<p class="muted small">${L('Dernier relevé', 'Last record')} : <b>${money(el.real)}</b> ${L('le', 'on')} ${fdt(el.real_at)}</p>` : ''}</form>
   </div>
   <div class="kpis">
     ${kpi(el.real != null ? 'Solde Eldorado (relevé)' : 'Solde Eldorado (calculé)', money(base), 'accent')}
@@ -2726,7 +2718,7 @@ const ACTIONS = {
     try {
       const r = await botCall(a);
       const msgs = {
-        sync: L(`Synchro faite : ${n(r.newOrders)} nouvelle(s) commande(s), ${n(r.newRequests)} demande(s)`, `Sync done: ${n(r.newOrders)} new order(s), ${n(r.newRequests)} request(s)`),
+        sync: L(`Synchro faite : ${n(r.newOrders)} nouvelle(s) commande(s), ${n(r.newRequests)} demande(s), ${n(r.autoOffers)} offre(s) auto`, `Sync done: ${n(r.newOrders)} new order(s), ${n(r.newRequests)} request(s), ${n(r.autoOffers)} auto offer(s)`),
         test: L('Connexion à Eldorado OK', 'Eldorado connection OK'), online: L('Tu es en ligne sur Eldorado', "You're online on Eldorado"), offline: L('Tu es hors ligne sur Eldorado', "You're offline on Eldorado"),
       };
       toast(msgs[a] || 'OK');
@@ -3095,6 +3087,404 @@ const CHANGES = {
   },
   availability: (el) => { sb.rpc('set_my_availability', { p_value: el.value }).then(({ error }) => toast(error ? errMsg(error) : 'Dispo : ' + el.value, error ? 'error' : 'ok')); },
 };
+
+/* =====================================================================
+   BOT ELDORADO — demandes de boosting, offres, tables de prix, assistant
+   ===================================================================== */
+const BOT_DELIVERIES = [['Hour1', '1 h'], ['Hour2', '2 h'], ['Hour3', '3 h'], ['Hour5', '5 h'], ['Hour8', '8 h'], ['Hour12', '12 h'],
+  ['Day1', '1 j'], ['Day2', '2 j'], ['Day3', '3 j'], ['Day5', '5 j'], ['Day7', '7 j'], ['Day10', '10 j'], ['Day14', '14 j'], ['Day28', '28 j']];
+const botDelLabel = (v) => { const d = BOT_DELIVERIES.find((x) => x[0] === v); return d ? (EN() ? d[1].replace(' j', ' d') : d[1]) : (v || '—'); };
+// modèles de départ (prix d'exemple, à ajuster)
+function botTiers(list) {
+  const out = [];
+  list.forEach(([tier, divs, price]) => {
+    if (!divs) out.push({ name: tier, price });
+    else for (let i = 1; i <= divs; i++) out.push({ name: `${tier} ${divs === 4 ? 5 - i : i}`, price });
+  });
+  if (out.length) out[0].price = 0;
+  return out;
+}
+const BOT_TEMPLATES = {
+  rl: () => ({ name: 'Rocket League', ranks: botTiers([['Bronze', 3, 1], ['Silver', 3, 1.5], ['Gold', 3, 2], ['Platinum', 3, 3], ['Diamond', 3, 5], ['Champion', 3, 8], ['Grand Champion', 3, 14], ['Supersonic Legend', 0, 30]]) }),
+  val: () => ({ name: 'Valorant', ranks: botTiers([['Iron', 3, 1], ['Bronze', 3, 1.5], ['Silver', 3, 2], ['Gold', 3, 3], ['Platinum', 3, 4], ['Diamond', 3, 6], ['Ascendant', 3, 9], ['Immortal', 3, 15], ['Radiant', 0, 40]]) }),
+  lol: () => ({ name: 'League of Legends', ranks: botTiers([['Iron', 4, 2], ['Bronze', 4, 2.5], ['Silver', 4, 3], ['Gold', 4, 4], ['Platinum', 4, 5], ['Emerald', 4, 7], ['Diamond', 4, 10], ['Master', 0, 25]]) }),
+  blank: () => ({ name: L('Ma table', 'My table'), ranks: [] }),
+};
+const BOT_DEFAULT_MSG = 'Hi {buyer}! I can boost you from {current} to {target} for ${price}, delivery within {delivery}. Experienced & safe booster, message me if you have any questions!';
+
+// même calcul que le bot (supabase/functions/eldorado-bot/index.ts)
+function parseRanks(text) {
+  return String(text || '').split(/\r?\n/).map((l) => l.trim()).filter(Boolean).map((l, i) => {
+    const m = l.match(/^(.*?)\s*(?:=|:|;|\t)\s*\$?\s*(-?[\d.,]+)\s*\$?\s*$/);
+    const name = (m ? m[1] : l).trim().slice(0, 60);
+    return { name, price: i === 0 ? 0 : (m ? Math.max(0, n(m[2].replace(',', '.'))) : 0) };
+  }).filter((r) => r.name);
+}
+const ranksText = (ranks) => (ranks || []).map((r, i) => `${r.name} = ${i === 0 ? 0 : n(r.price)}`).join('\n');
+function botPrice(p, from, to, queue) {
+  let v = 0;
+  for (let i = from + 1; i <= to; i++) v += n(p.ranks[i] && p.ranks[i].price);
+  if (queue === 'duo') v *= n(p.duo_mult) || 1;
+  if (n(p.min_price) > 0) v = Math.max(v, n(p.min_price));
+  return r2(v);
+}
+function botMessage(p, v) {
+  const tpl = String(p.message || '').trim();
+  if (!tpl) return '';
+  const del = String(v.delivery || '').replace(/^Hour(\d+)$/, (_, h) => `${h} hour${h === '1' ? '' : 's'}`).replace(/^Day(\d+)$/, (_, d) => `${d} day${d === '1' ? '' : 's'}`);
+  let msg = tpl.split('{current}').join(v.from || 'your current rank').split('{target}').join(v.to || 'your target rank')
+    .split('{price}').join(n(v.price).toFixed(2)).split('{queue}').join(v.queue || (p.solo_only ? 'solo' : 'solo/duo'))
+    .split('{buyer}').join(v.buyer || '').split('{delivery}').join(del);
+  if (p.solo_only && !/solo/i.test(msg)) msg += ' (Solo queue only.)';
+  return msg;
+}
+function botPickProfile(r) {
+  const cat = String(r.category || '').toLowerCase();
+  return (S.bot.profiles || []).filter((p) => p.active && (!p.game_id || String(p.game_id) === String(r.game_id || '')) && (!p.category_match || cat.includes(String(p.category_match).toLowerCase())))
+    .sort((a, b) => (b.game_id ? 2 : 0) + (b.category_match ? 1 : 0) - ((a.game_id ? 2 : 0) + (a.category_match ? 1 : 0)))[0] || null;
+}
+
+function botStatusCard(st) {
+  const last = st && st.eldorado_bot_last_sync;
+  const err = st && st.eldorado_bot_error;
+  const ok = last && !err && Date.now() - new Date(last) < 10 * 60000;
+  const auto = !!(st && st.bot_auto_offers);
+  return `<div class="grid-2">
+    <div class="card"><div class="card-head"><h2>${ic('bot')} ${L('Bot Eldorado', 'Eldorado bot')}</h2>
+      <span class="badge ${ok ? 'b-green' : err ? 'b-red' : 'b-grey'}">${ok ? L('Actif', 'Active') : err ? L('Erreur', 'Error') : L('Pas encore lancé', 'Not started yet')}</span></div>
+      <p class="muted small">${L('Toutes les 2 minutes : importe tes commandes, récupère les demandes de boosting et envoie les offres automatiques. Il tourne sur Supabase, même PC éteint.', 'Every 2 minutes: imports your orders, fetches boosting requests and sends automatic offers. Runs on Supabase, even with your PC off.')}</p>
+      <div class="chain">
+        <div class="row"><span>${L('Dernière synchro', 'Last sync')}</span><b>${last ? fdt(last) : '—'}</b></div>
+        <div class="row"><span>${L('Statut Eldorado', 'Eldorado status')}</span><b>${st && st.eldorado_online === true ? `<span class="green">${L('En ligne', 'Online')}</span>` : st && st.eldorado_online === false ? L('Hors ligne', 'Offline') : '—'}</b></div>
+      </div>
+      ${err ? `<div class="error-box">${esc(err)}</div>` : ''}
+      <div class="form-actions">
+        <button class="primary" data-action="bot" data-bot="sync">${ic('refresh')} ${L('Synchroniser maintenant', 'Sync now')}</button>
+        <button data-action="bot" data-bot="test">${ic('check')} ${L('Tester la connexion', 'Test connection')}</button>
+        <button data-action="bot" data-bot="online">${L('En ligne', 'Online')}</button>
+        <button data-action="bot" data-bot="offline">${L('Hors ligne', 'Offline')}</button>
+      </div></div>
+    <div class="card"><div class="card-head"><h2>${ic('send')} ${L('Offres automatiques', 'Automatic offers')}</h2>
+      <span class="badge ${auto ? 'b-green' : 'b-grey'}">${auto ? L('Activées', 'On') : L('Désactivées', 'Off')}</span></div>
+      <p class="muted small">${L('Quand c\'est activé, le bot répond tout seul aux nouvelles demandes de boosting avec le prix de ta table. Aucune notification pour les demandes : tout se passe ici.', 'When on, the bot answers new boosting requests by itself with your table\'s price. No notifications for requests: everything happens here.')}</p>
+      <div class="warn-box">${L('<b>À savoir :</b> l\'API d\'Eldorado ne donne que le jeu, la catégorie et le pseudo du client, pas ses rangs. Si Eldorado les envoie, le bot calcule le prix exact avec ta table. Sinon, il n\'envoie rien tout seul, sauf si tu actives « prix fixe si rangs inconnus » dans la table ; tu fais alors l\'offre à la main en 2 clics ci-dessous.', '<b>Good to know:</b> Eldorado\'s API only gives the game, the category and the buyer\'s name, not their ranks. If Eldorado sends them, the bot computes the exact price from your table. Otherwise it sends nothing by itself, unless you turn on "fixed price if ranks unknown" in the table; you then make the offer by hand in 2 clicks below.')}</div>
+      <div class="form-actions"><button class="${auto ? '' : 'primary'}" data-action="bot-auto">${auto ? L('Désactiver', 'Turn off') : L('Activer les offres automatiques', 'Turn on automatic offers')}</button></div></div>
+  </div>`;
+}
+
+function botStateBadge(r) {
+  const p = r.offer_price != null ? ` ${money(r.offer_price)}` : '';
+  if (r.offer_state === 'Gagnée') return `<span class="badge b-green">${L('Gagnée', 'Won')}${p}</span>`;
+  if (r.offer_state === 'Perdue') return `<span class="badge b-grey">${L('Perdue', 'Lost')}</span>`;
+  if (r.offer_state === 'Envoyée') return `<span class="badge b-blue">${L('Offre envoyée', 'Offer sent')}${p}${r.offer_auto ? ' · auto' : ''}</span>`;
+  if (r.offer_state === 'Retirée') return `<span class="badge b-grey">${L('Offre retirée', 'Offer withdrawn')}</span>`;
+  if (r.offer_state === 'Erreur') return `<span class="badge b-red" title="${esc(r.offer_error || '')}">${L('Erreur d\'envoi', 'Send error')}</span>`;
+  if (!r.active) return `<span class="badge b-grey">${L('Expirée', 'Expired')}</span>`;
+  if (r.skip_reason) return `<span class="badge b-orange" title="${esc(r.skip_reason)}">${L('À faire à la main', 'Manual')}</span>`;
+  return `<span class="badge b-purple">${L('Nouvelle', 'New')}</span>`;
+}
+function botRequestsCard(reqs) {
+  const rows = reqs.map((r) => {
+    const canOffer = r.active && !['Gagnée', 'Perdue'].includes(r.offer_state);
+    const sent = r.offer_state === 'Envoyée' && r.offer_id;
+    const det = r.detected && (r.detected.from || r.detected.queue) ? `<div class="muted small">${esc([r.detected.from && r.detected.to ? `${r.detected.from} → ${r.detected.to}` : '', r.detected.queue || ''].filter(Boolean).join(' · '))}</div>` : '';
+    return `<tr><td class="muted small">${fdt(r.created_date || r.seen_at)}</td>
+      <td><b>${esc(r.category || 'Boost')}</b>${r.game_id ? ` <span class="muted small">· ${L('jeu', 'game')} ${esc(r.game_id)}</span>` : ''}${det}</td>
+      <td>${esc(r.buyer || '—')}</td>
+      <td>${botStateBadge(r)}${r.skip_reason && !r.offer_state ? `<div class="muted small">${esc(r.skip_reason)}</div>` : ''}${r.offer_state === 'Erreur' ? `<div class="muted small red">${esc((r.offer_error || '').slice(0, 140))}</div>` : ''}</td>
+      <td class="num" style="white-space:nowrap">
+        ${canOffer ? `<button class="sm ${sent ? '' : 'primary'}" data-action="bot-offer" data-id="${r.id}">${ic(sent ? 'edit' : 'send')} ${sent ? L('Modifier', 'Edit') : L('Proposer', 'Offer')}</button>` : ''}
+        ${sent ? `<button class="sm ghost" data-action="bot-withdraw" data-id="${r.id}" title="${esc(L('Retirer l\'offre', 'Withdraw offer'))}">${ic('x')}</button>` : ''}
+        ${r.skip_reason && !r.offer_state && r.active ? `<button class="sm ghost" data-action="bot-retry" data-id="${r.id}" title="${esc(L('Laisser le bot réessayer', 'Let the bot retry'))}">${ic('refresh')}</button>` : ''}
+        <button class="sm ghost" data-action="bot-raw" data-id="${r.id}" title="${esc(L('Données reçues d\'Eldorado', 'Data received from Eldorado'))}">${ic('file')}</button></td></tr>`;
+  }).join('');
+  return `<div class="card"><div class="card-head"><h2>${ic('inbox')} ${L('Demandes de boosting', 'Boosting requests')}</h2>
+      <span class="muted small">${L('30 derniers jours', 'Last 30 days')}</span></div>
+    ${reqs.length ? `<div class="table-wrap"><table><thead><tr><th>${L('Reçue', 'Received')}</th><th>${L('Demande', 'Request')}</th><th>${L('Client', 'Buyer')}</th><th>${L('État', 'State')}</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`
+    : emptyBox(L('Aucune demande pour l\'instant. Clique « Synchroniser maintenant » pour vérifier.', 'No request yet. Click "Sync now" to check.'), 'inbox')}</div>`;
+}
+function botProfilesCard(profiles) {
+  return `<div class="card"><div class="card-head"><h2>${ic('dollar')} ${L('Tables de prix', 'Price tables')}</h2>
+      <button class="sm primary" data-action="bot-profile-new">${ic('plus')} ${L('Nouvelle table', 'New table')}</button></div>
+    <p class="muted small">${L('Une table par jeu (ou par catégorie). Le bot prend la table qui correspond au jeu et à la catégorie de la demande. Tu peux la créer avec l\'assistant : explique avec tes mots, il propose les prix.', 'One table per game (or category). The bot uses the table matching the request\'s game and category. You can build it with the assistant: explain in your own words, it suggests the prices.')}</p>
+    ${profiles.length ? `<div class="chain">${profiles.map((p) => {
+    const rk = Array.isArray(p.ranks) ? p.ranks : [];
+    const tags = [p.solo_only ? 'Solo only' : `Duo ×${n(p.duo_mult)}`, n(p.min_price) > 0 ? `min ${money(p.min_price)}` : '', n(p.max_price) > 0 ? `max ${money(p.max_price)}` : '',
+      p.auto_when_unknown && n(p.base_price) > 0 ? `${L('fixe', 'fixed')} ${money(p.base_price)}` : '', botDelLabel(p.delivery)].filter(Boolean).join(' · ');
+    return `<div class="row"><span><b>${esc(p.name)}</b> <span class="badge ${p.active ? (p.auto_send ? 'b-green' : 'b-blue') : 'b-grey'}">${p.active ? (p.auto_send ? 'Auto' : L('Manuel', 'Manual')) : L('En pause', 'Paused')}</span>
+        <div class="muted small">${esc(p.game_id ? `${L('Jeu', 'Game')} ${p.game_id}` : L('Tous les jeux', 'All games'))} · ${esc(p.category_match ? `${L('catégorie contient', 'category contains')} « ${p.category_match} »` : L('toutes catégories', 'all categories'))} · ${rk.length} ${L('rangs', 'ranks')}${rk.length > 1 ? ` (${esc(rk[0].name)} → ${esc(rk[rk.length - 1].name)})` : ''}</div>
+        <div class="muted small">${esc(tags)}</div></span>
+      <span style="display:flex;gap:6px"><button class="sm" data-action="bot-profile-edit" data-id="${p.id}">${ic('edit')} ${L('Modifier', 'Edit')}</button>
+        <button class="sm ghost" data-action="bot-profile-toggle" data-id="${p.id}">${p.active ? L('Pause', 'Pause') : L('Activer', 'Enable')}</button>
+        <button class="sm ghost" data-action="bot-profile-del" data-id="${p.id}" title="${esc(L('Supprimer', 'Delete'))}">${ic('x')}</button></span></div>`;
+  }).join('')}</div>` : emptyBox(L('Pas encore de table de prix.', 'No price table yet.'), 'dollar', `<button class="primary" data-action="bot-profile-new">${ic('sparkles')} ${L('Créer ma première table', 'Create my first table')}</button>`)}</div>`;
+}
+
+async function loadBot() {
+  const since = new Date(Date.now() - 30 * 86400000).toISOString();
+  const [st, profiles, reqs] = await Promise.all([
+    sb.from('app_settings').select('eldorado_bot_last_sync, eldorado_bot_error, eldorado_online, bot_auto_offers, bot_auto_since').eq('id', 1).maybeSingle().then((r) => r.data, () => null),
+    sb.from('bot_price_profiles').select('*').order('created_at').then((r) => r.data || [], () => []),
+    sb.from('eldorado_requests').select('*').gte('seen_at', since).order('created_date', { ascending: false, nullsFirst: false }).limit(80).then((r) => r.data || [], () => []),
+  ]);
+  S.bot = { st, profiles, reqs };
+  return S.bot;
+}
+async function viewBot(main) {
+  const b = await loadBot();
+  const active = b.reqs.filter((r) => r.active).length;
+  const sent = b.reqs.filter((r) => r.offer_state === 'Envoyée').length;
+  const won = b.reqs.filter((r) => r.offer_state === 'Gagnée').length;
+  main.innerHTML = `${head(L('Bot', 'Bot'), L('Demandes de boosting, offres automatiques et tables de prix · toi seul as cet onglet', 'Boosting requests, automatic offers and price tables · only you see this tab'))}
+  ${botStatusCard(b.st)}
+  <div class="kpis">
+    ${kpi(L('Demandes actives', 'Active requests'), String(active), active ? 'accent' : '')}
+    ${kpi(L('Offres en attente', 'Pending offers'), String(sent))}
+    ${kpi(L('Offres gagnées (30 j)', 'Offers won (30 d)'), String(won), won ? 'good' : '')}
+    ${kpi(L('Tables de prix', 'Price tables'), String(b.profiles.length))}
+  </div>
+  ${botRequestsCard(b.reqs)}
+  ${botProfilesCard(b.profiles)}`;
+}
+
+/* ---------- proposer une offre ---------- */
+function openOfferModal(id) {
+  const r = (S.bot && S.bot.reqs || []).find((x) => x.id === id);
+  if (!r) return;
+  const profiles = (S.bot.profiles || []).filter((p) => Array.isArray(p.ranks));
+  const pick = (r.profile_id && profiles.find((p) => p.id === r.profile_id)) || botPickProfile(r) || profiles[0] || null;
+  const sent = r.offer_state === 'Envoyée' && r.offer_id;
+  modal(`<form data-form="bot-offer" data-id="${r.id}">
+    <div class="card-head"><h2>${ic('send')} ${sent ? L('Modifier mon offre', 'Edit my offer') : L('Proposer une offre', 'Make an offer')}</h2><button type="button" class="sm ghost" data-action="close-modal">${ic('x')}</button></div>
+    <p class="muted"><b>${esc(r.category || 'Boost')}</b>${r.game_id ? ` · ${L('jeu', 'game')} ${esc(r.game_id)}` : ''}${r.buyer ? ` · ${esc(r.buyer)}` : ''} · ${fdt(r.created_date || r.seen_at)}</p>
+    <div class="form-grid">
+      ${field(L('Table de prix', 'Price table'), `<select name="profile"><option value="">${esc(L('— prix libre —', '— free price —'))}</option>${profiles.map((p) => opt(p.id, p.name, pick && p.id === pick.id)).join('')}</select>`)}
+      ${field(L('Mode', 'Queue'), `<select name="queue">${opt('solo', 'Solo', !(r.detected && r.detected.queue === 'duo'))}${opt('duo', 'Duo', r.detected && r.detected.queue === 'duo')}</select>`)}
+      ${field(L('Rang actuel du client', 'Buyer\'s current rank'), '<select name="from"></select>')}
+      ${field(L('Rang voulu', 'Target rank'), '<select name="to"></select>')}
+      ${field(L('Prix de l\'offre ($)', 'Offer price ($)'), `<input name="price" type="number" step="0.01" min="0.5" required value="${r.offer_price != null ? r.offer_price : ''}">`)}
+      ${field(L('Délai garanti', 'Guaranteed delivery'), `<select name="delivery">${BOT_DELIVERIES.map(([v, lab]) => opt(v, botDelLabel(v), v === (r.offer_delivery || (pick && pick.delivery) || 'Day2'))).join('')}</select>`)}
+      ${field(L('Message au client (anglais conseillé)', 'Message to the buyer'), `<textarea name="message" rows="4" maxlength="1000">${esc(r.offer_message || '')}</textarea>`, 'class="field span-2"')}
+    </div>
+    <div class="muted small" id="offer-hint" style="margin-top:8px"></div>
+    <div class="form-actions"><button class="primary" type="submit">${ic('send')} ${sent ? L('Mettre à jour l\'offre', 'Update offer') : L('Envoyer l\'offre sur Eldorado', 'Send offer on Eldorado')}</button>
+      <button type="button" class="ghost" data-action="close-modal">${L('Annuler', 'Cancel')}</button></div>
+  </form>`, 'small');
+  const f = document.querySelector('form[data-form="bot-offer"]');
+  if (f) { f.dataset.msgEdited = r.offer_message ? '1' : ''; fillOfferRanks(f, r); updateOfferForm(f, null); }
+}
+function offerProfile(f) { return (S.bot.profiles || []).find((p) => p.id === f.elements.profile.value) || null; }
+function fillOfferRanks(f, r) {
+  const p = offerProfile(f);
+  const ranks = p ? p.ranks : [];
+  const det = (r && r.detected) || {};
+  const iFrom = Math.max(0, ranks.findIndex((x) => x.name === det.from));
+  const iTo = ranks.findIndex((x) => x.name === det.to);
+  const opts = (sel) => ranks.map((x, i) => opt(String(i), x.name, i === sel)).join('');
+  f.elements.from.innerHTML = ranks.length ? opts(iFrom) : `<option value="">—</option>`;
+  f.elements.to.innerHTML = ranks.length ? opts(iTo >= 0 ? iTo : Math.min(ranks.length - 1, iFrom + 1)) : `<option value="">—</option>`;
+  f.elements.from.disabled = f.elements.to.disabled = !ranks.length;
+}
+function updateOfferForm(f, target) {
+  const name = target && target.name;
+  if (name === 'message') { f.dataset.msgEdited = '1'; return; }
+  if (name === 'price' || name === 'delivery') { if (!f.dataset.msgEdited) refreshOfferMessage(f); return; }
+  if (name === 'profile') {
+    fillOfferRanks(f, null);
+    const p = offerProfile(f); if (p && p.delivery) f.elements.delivery.value = p.delivery;
+  }
+  const p = offerProfile(f);
+  const hint = $('#offer-hint');
+  if (p && p.ranks.length) {
+    const a = Number(f.elements.from.value); const b = Number(f.elements.to.value);
+    if (b > a) {
+      if (target || !f.elements.price.value) f.elements.price.value = botPrice(p, a, b, f.elements.queue.value);
+      if (hint) hint.innerHTML = `${L('Prix de ta table', 'Table price')} : <b>${money(botPrice(p, a, b, f.elements.queue.value))}</b>${p.solo_only && f.elements.queue.value === 'duo' ? ` · <span class="red">${L('ta table est en solo only', 'your table is solo only')}</span>` : ''}`;
+    } else if (hint) hint.textContent = L('Choisis un rang voulu plus haut que le rang actuel.', 'Pick a target rank above the current rank.');
+  } else if (hint) hint.textContent = L('Pas de table : tape le prix toi-même.', 'No table: type the price yourself.');
+  if (!f.dataset.msgEdited) refreshOfferMessage(f);
+}
+function refreshOfferMessage(f) {
+  const p = offerProfile(f);
+  const r = (S.bot.reqs || []).find((x) => x.id === f.dataset.id) || {};
+  const ranks = p ? p.ranks : [];
+  const a = Number(f.elements.from.value); const b = Number(f.elements.to.value);
+  f.elements.message.value = p ? botMessage(p, {
+    from: ranks[a] && b > a ? ranks[a].name : '', to: ranks[b] && b > a ? ranks[b].name : '', price: f.elements.price.value,
+    queue: f.elements.queue.value, buyer: r.buyer, delivery: f.elements.delivery.value,
+  }) : f.elements.message.value;
+}
+async function onOfferSubmit(f, sub) {
+  const o = formData(f);
+  if (!(n(o.price) > 0)) return toast(L('Entre un prix.', 'Enter a price.'), 'error');
+  if (sub) sub.disabled = true;
+  try {
+    const res = await botCall('offer', { requestId: f.dataset.id, price: n(o.price), delivery: o.delivery, message: o.message, profileId: o.profile || null });
+    closeModal(); toast(res && res.updated ? L('Offre mise à jour sur Eldorado', 'Offer updated on Eldorado') : L(`Offre de ${money(o.price)} envoyée sur Eldorado`, `${money(o.price)} offer sent on Eldorado`)); refresh();
+  } catch (e) { toast(errMsg(e), 'error'); if (sub) sub.disabled = false; }
+}
+
+/* ---------- tables de prix ---------- */
+function openProfileChooser() {
+  modal(`<div class="card-head"><h2>${ic('sparkles')} ${L('Nouvelle table de prix', 'New price table')}</h2><button type="button" class="sm ghost" data-action="close-modal">${ic('x')}</button></div>
+    <form data-form="bot-ai-new">
+      ${field(L('Explique avec tes mots ce que tu veux', 'Explain in your own words what you want'), `<textarea name="text" rows="5" required placeholder="${esc(L('ex. Rocket League 2v2, de Bronze à SSL. 2$ par division jusqu\'à Plat, 4$ en Diamant, 8$ en Champion, 15$ en GC. Pas de duo, solo q only. Minimum 5$, et pas d\'offre auto au-dessus de 150$. Délai 2 jours.', 'e.g. Rocket League 2v2, Bronze to SSL. $2 per division up to Plat, $4 in Diamond, $8 in Champion, $15 in GC. No duo, solo q only. Minimum $5, no auto offer above $150. 2 days delivery.'))}"></textarea>`)}
+      <div class="form-actions"><button class="primary" type="submit">${ic('sparkles')} ${L('Proposer une table', 'Suggest a table')}</button></div>
+    </form>
+    <p class="muted small" style="margin-top:18px">${L('Ou pars d\'un modèle (prix d\'exemple, à ajuster) :', 'Or start from a template (example prices, adjust them):')}</p>
+    <div class="form-actions">
+      <button data-action="bot-template" data-t="rl">Rocket League</button>
+      <button data-action="bot-template" data-t="val">Valorant</button>
+      <button data-action="bot-template" data-t="lol">League of Legends</button>
+      <button class="ghost" data-action="bot-template" data-t="blank">${L('Table vide', 'Empty table')}</button>
+    </div>`, 'small');
+}
+function openProfileEditor(p, summary) {
+  p = { active: true, auto_send: true, solo_only: false, duo_mult: 1.5, min_price: 5, max_price: 0, base_price: 0, auto_when_unknown: false, delivery: 'Day2', message: BOT_DEFAULT_MSG, ranks: [], game_id: '', category_match: '', ...p };
+  const games = [...new Set((S.bot && S.bot.reqs || []).map((r) => r.game_id).filter(Boolean))];
+  const cats = [...new Set((S.bot && S.bot.reqs || []).map((r) => r.category).filter(Boolean))];
+  const chk = (name, val, label, help) => `<label class="check" style="display:flex;gap:8px;align-items:flex-start;margin:6px 0"><input type="checkbox" name="${name}" ${val ? 'checked' : ''}><span>${label}${help ? `<div class="muted small">${help}</div>` : ''}</span></label>`;
+  modal(`<form data-form="bot-profile" data-id="${esc(p.id || '')}">
+    <div class="card-head"><h2>${ic('dollar')} ${p.id ? L('Modifier la table', 'Edit table') : L('Nouvelle table de prix', 'New price table')}</h2><button type="button" class="sm ghost" data-action="close-modal">${ic('x')}</button></div>
+    ${summary ? `<div class="warn-box" style="margin:0 0 14px">${ic('sparkles')} ${esc(summary)}</div>` : ''}
+    <div class="form-grid">
+      ${field(L('Nom', 'Name'), `<input name="name" required maxlength="60" value="${esc(p.name)}">`)}
+      ${field(L('ID du jeu Eldorado (vide = tous)', 'Eldorado game ID (empty = all)'), `<input name="game_id" list="bot-games" value="${esc(p.game_id || '')}" placeholder="${esc(games[0] || '')}"><datalist id="bot-games">${games.map((g) => `<option value="${esc(g)}">`).join('')}</datalist>`)}
+      ${field(L('La catégorie contient (vide = toutes)', 'Category contains (empty = all)'), `<input name="category_match" list="bot-cats" value="${esc(p.category_match || '')}"><datalist id="bot-cats">${cats.map((c) => `<option value="${esc(c)}">`).join('')}</datalist>`)}
+      ${field(L('Délai garanti', 'Guaranteed delivery'), `<select name="delivery">${BOT_DELIVERIES.map(([v]) => opt(v, botDelLabel(v), v === p.delivery)).join('')}</select>`)}
+      ${field(L('Rangs, du plus bas au plus haut : « Rang = prix pour y monter depuis le rang d\'avant »', 'Ranks, lowest to highest: "Rank = price to reach it from the previous rank"'), `<textarea name="ranks" rows="10" spellcheck="false" placeholder="Gold 1 = 0&#10;Gold 2 = 2&#10;Gold 3 = 2&#10;Platinum 1 = 3">${esc(ranksText(p.ranks))}</textarea>`, 'class="field span-2"')}
+      ${field(L('Multiplicateur duo', 'Duo multiplier'), `<input name="duo_mult" type="number" step="0.05" min="1" value="${n(p.duo_mult)}">`)}
+      ${field(L('Prix minimum ($)', 'Minimum price ($)'), `<input name="min_price" type="number" step="0.01" min="0" value="${n(p.min_price)}">`)}
+      ${field(L('Pas d\'offre auto au-dessus de ($, 0 = sans limite)', 'No auto offer above ($, 0 = no limit)'), `<input name="max_price" type="number" step="0.01" min="0" value="${n(p.max_price)}">`)}
+      ${field(L('Prix fixe si rangs inconnus ($)', 'Fixed price if ranks unknown ($)'), `<input name="base_price" type="number" step="0.01" min="0" value="${n(p.base_price)}">`)}
+      <div class="field span-2">
+        ${chk('solo_only', p.solo_only, L('Solo queue only', 'Solo queue only'), L('Pas de duo : le bot ignore les demandes en duo et le précise dans le message.', 'No duo: the bot skips duo requests and says so in the message.'))}
+        ${chk('auto_send', p.auto_send, L('Envoyer les offres automatiquement avec cette table', 'Send offers automatically with this table'))}
+        ${chk('auto_when_unknown', p.auto_when_unknown, L('Envoyer le prix fixe quand Eldorado ne donne pas les rangs', 'Send the fixed price when Eldorado gives no ranks'), L('⚠ Le client peut accepter ce prix pour un gros boost : à utiliser avec prudence.', '⚠ The buyer may accept this price for a big boost: use with care.'))}
+        ${chk('active', p.active, L('Table active', 'Table active'))}
+      </div>
+      ${field(L('Message envoyé avec l\'offre ({current} {target} {price} {queue} {delivery} {buyer})', 'Message sent with the offer ({current} {target} {price} {queue} {delivery} {buyer})'), `<textarea name="message" rows="3" maxlength="1000">${esc(p.message || '')}</textarea>`, 'class="field span-2"')}
+    </div>
+    <div class="card" style="margin-top:14px;padding:14px"><b>${L('Essayer la table', 'Try the table')}</b>
+      <div class="form-grid" style="margin-top:8px">
+        ${field(L('De', 'From'), '<select name="t_from"></select>')}${field(L('À', 'To'), '<select name="t_to"></select>')}
+        ${field(L('Mode', 'Queue'), `<select name="t_queue">${opt('solo', 'Solo', true)}${opt('duo', 'Duo', false)}</select>`)}
+      </div><div id="profile-try" style="margin-top:8px"></div></div>
+    <div class="card" style="margin-top:14px;padding:14px"><b>${ic('sparkles')} ${L('Demander une modif à l\'assistant', 'Ask the assistant for a change')}</b>
+      <div style="display:flex;gap:8px;margin-top:8px"><input name="ai_text" style="flex:1" placeholder="${esc(L('ex. monte tout le Diamant de 1$ et ajoute un minimum de 8$', 'e.g. raise all of Diamond by $1 and add an $8 minimum'))}">
+      <button type="button" data-action="bot-ai-edit">${L('Appliquer', 'Apply')}</button></div></div>
+    <div class="form-actions"><button class="primary" type="submit">${ic('check')} ${L('OK, enregistrer la table', 'OK, save the table')}</button>
+      <button type="button" class="ghost" data-action="close-modal">${L('Annuler', 'Cancel')}</button></div>
+  </form>`);
+  const f = document.querySelector('form[data-form="bot-profile"]');
+  if (f) updateProfileTry(f, true);
+}
+function profileFromForm(f) {
+  const o = formData(f);
+  return {
+    name: o.name || L('Ma table', 'My table'), game_id: o.game_id || null, category_match: o.category_match || null, delivery: o.delivery || 'Day2',
+    ranks: parseRanks(o.ranks), duo_mult: Math.max(1, n(o.duo_mult) || 1), min_price: Math.max(0, n(o.min_price)), max_price: Math.max(0, n(o.max_price)),
+    base_price: Math.max(0, n(o.base_price)), solo_only: !!o.solo_only, auto_send: !!o.auto_send, auto_when_unknown: !!o.auto_when_unknown, active: !!o.active,
+    message: o.message || null,
+  };
+}
+function updateProfileTry(f, rebuild) {
+  const p = profileFromForm(f);
+  const box = $('#profile-try');
+  if (rebuild) {
+    const a = Number(f.elements.t_from.value); const b = Number(f.elements.t_to.value);
+    const names = p.ranks.map((r) => r.name);
+    f.elements.t_from.innerHTML = names.map((x, i) => opt(String(i), x, i === (a >= 0 && a < names.length ? a : 0))).join('');
+    f.elements.t_to.innerHTML = names.map((x, i) => opt(String(i), x, i === (b > 0 && b < names.length ? b : names.length - 1))).join('');
+  }
+  if (!box) return;
+  if (p.ranks.length < 2) { box.innerHTML = `<span class="muted small">${L('Ajoute au moins 2 rangs.', 'Add at least 2 ranks.')}</span>`; return; }
+  const a = Number(f.elements.t_from.value); const b = Number(f.elements.t_to.value); const q = f.elements.t_queue.value;
+  if (!(b > a)) { box.innerHTML = `<span class="muted small">${L('Le rang « À » doit être plus haut.', '"To" must be higher.')}</span>`; return; }
+  const price = botPrice(p, a, b, q);
+  const blocked = (p.solo_only && q === 'duo') ? L('le bot n\'enverra rien (solo only)', 'the bot won\'t send anything (solo only)') : (p.max_price > 0 && price > p.max_price) ? L('au-dessus du max : offre à faire à la main', 'above max: manual offer') : '';
+  box.innerHTML = `${L('Prix', 'Price')} : <b style="font-size:18px">${money(price)}</b>${blocked ? ` · <span class="red">${esc(blocked)}</span>` : ''}
+    <div class="muted small" style="margin-top:6px">${esc(botMessage(p, { from: p.ranks[a].name, to: p.ranks[b].name, price, queue: q, buyer: 'Buyer', delivery: p.delivery }))}</div>`;
+}
+async function saveProfile(f, sub) {
+  const p = profileFromForm(f);
+  if (p.ranks.length === 1) return toast(L('Mets au moins 2 rangs (ou aucun pour un prix fixe).', 'Add at least 2 ranks (or none for a fixed price).'), 'error');
+  if (!p.ranks.length && !(p.base_price > 0)) return toast(L('Ajoute des rangs ou un prix fixe.', 'Add ranks or a fixed price.'), 'error');
+  if (sub) sub.disabled = true;
+  try {
+    const id = f.dataset.id;
+    if (id) await run(sb.from('bot_price_profiles').update({ ...p, updated_at: new Date().toISOString() }).eq('id', id));
+    else await run(sb.from('bot_price_profiles').insert(p));
+    // les demandes mises de côté faute de table peuvent être retentées
+    await sb.from('eldorado_requests').update({ skip_reason: null }).eq('active', true).is('offer_state', null).not('skip_reason', 'is', null);
+    closeModal(); toast(L('Table de prix enregistrée', 'Price table saved')); refresh();
+  } catch (e) { toast(errMsg(e), 'error'); if (sub) sub.disabled = false; }
+}
+async function askAssistant(text, profile, btn) {
+  if (btn) { btn.disabled = true; btn.dataset.label = btn.innerHTML; btn.innerHTML = `${ic('sparkles')} ${L('L\'assistant réfléchit…', 'Thinking…')}`; }
+  try {
+    const r = await botCall('assistant', { text, profile });
+    openProfileEditor({ ...(profile || {}), ...(r.profile || {}) }, r.summary);
+  } catch (e) { toast(errMsg(e), 'error'); }
+  if (btn && btn.isConnected !== false) { btn.disabled = false; btn.innerHTML = btn.dataset.label; }
+}
+
+const BOT_ACTIONS = {
+  'bot-auto': async (el) => {
+    const on = !(S.bot && S.bot.st && S.bot.st.bot_auto_offers);
+    if (on && !(S.bot.profiles || []).some((p) => p.active && p.auto_send)) return toast(L('Crée d\'abord une table de prix active avec l\'envoi auto.', 'First create an active price table with auto send.'), 'error');
+    if (on && !confirm(L('Activer les offres automatiques ? Le bot enverra tout seul des offres aux NOUVELLES demandes de boosting, avec les prix de tes tables.', 'Turn on automatic offers? The bot will send offers by itself to NEW boosting requests, using your tables\' prices.'))) return;
+    el.disabled = true;
+    try {
+      await run(sb.from('app_settings').update(on ? { bot_auto_offers: true, bot_auto_since: new Date().toISOString() } : { bot_auto_offers: false }).eq('id', 1));
+      toast(on ? L('Offres automatiques activées', 'Automatic offers on') : L('Offres automatiques désactivées', 'Automatic offers off')); refresh();
+    } catch (e) { toast(errMsg(e), 'error'); el.disabled = false; }
+  },
+  'bot-offer': (el) => openOfferModal(el.dataset.id),
+  'bot-withdraw': async (el) => {
+    if (!confirm(L('Retirer ton offre sur cette demande ?', 'Withdraw your offer on this request?'))) return;
+    el.disabled = true;
+    try { await botCall('withdraw', { requestId: el.dataset.id }); toast(L('Offre retirée', 'Offer withdrawn')); refresh(); } catch (e) { toast(errMsg(e), 'error'); el.disabled = false; }
+  },
+  'bot-retry': (el) => act(run(sb.from('eldorado_requests').update({ skip_reason: null, offer_state: null, offer_error: null }).eq('id', el.dataset.id)), L('Le bot réessaiera à la prochaine synchro', 'The bot will retry at the next sync')),
+  'bot-raw': (el) => {
+    const r = (S.bot.reqs || []).find((x) => x.id === el.dataset.id);
+    if (!r) return;
+    modal(`<div class="card-head"><h2>${ic('file')} ${L('Données reçues d\'Eldorado', 'Data received from Eldorado')}</h2><button type="button" class="sm ghost" data-action="close-modal">${ic('x')}</button></div>
+      <p class="muted small">${L('C\'est tout ce que l\'API d\'Eldorado envoie pour cette demande.', 'This is everything Eldorado\'s API sends for this request.')}</p>
+      <pre class="raw-json">${esc(JSON.stringify(r.raw || { id: r.id, gameId: r.game_id, boostingCategoryTitle: r.category, buyerUsername: r.buyer }, null, 2))}</pre>
+      ${r.offer_message ? `<p class="muted small">${L('Message envoyé', 'Message sent')} :</p><pre class="raw-json">${esc(r.offer_message)}</pre>` : ''}`, 'small');
+  },
+  'bot-profile-new': () => openProfileChooser(),
+  'bot-template': (el) => openProfileEditor((BOT_TEMPLATES[el.dataset.t] || BOT_TEMPLATES.blank)()),
+  'bot-profile-edit': (el) => { const p = (S.bot.profiles || []).find((x) => x.id === el.dataset.id); if (p) openProfileEditor(p); },
+  'bot-profile-toggle': (el) => { const p = (S.bot.profiles || []).find((x) => x.id === el.dataset.id); if (p) act(run(sb.from('bot_price_profiles').update({ active: !p.active }).eq('id', p.id))); },
+  'bot-profile-del': (el) => {
+    const p = (S.bot.profiles || []).find((x) => x.id === el.dataset.id);
+    if (p && confirm(L(`Supprimer la table « ${p.name} » ?`, `Delete the table "${p.name}"?`))) act(run(sb.from('bot_price_profiles').delete().eq('id', p.id)), L('Table supprimée', 'Table deleted'));
+  },
+  'bot-ai-edit': (el) => {
+    const f = el.closest('form');
+    const text = f.elements.ai_text.value.trim();
+    if (!text) return toast(L('Écris la modif que tu veux.', 'Write the change you want.'), 'error');
+    const cur = profileFromForm(f);
+    askAssistant(text, { ...cur, id: f.dataset.id || undefined }, el);
+  },
+};
+const BOT_FORMS = {
+  'bot-offer': (f, sub) => onOfferSubmit(f, sub),
+  'bot-profile': (f, sub) => saveProfile(f, sub),
+  'bot-ai-new': (f, sub) => askAssistant(formData(f).text, null, sub),
+};
+Object.assign(VIEWS, { bot: viewBot });
+Object.assign(ACTIONS, BOT_ACTIONS);
+Object.assign(FORMS, BOT_FORMS);
+document.addEventListener('input', (e) => {
+  const fo = e.target.closest && e.target.closest('form[data-form="bot-offer"]');
+  if (fo) { updateOfferForm(fo, e.target); return; }
+  const fp = e.target.closest && e.target.closest('form[data-form="bot-profile"]');
+  if (fp && e.target.name !== 'ai_text') updateProfileTry(fp, e.target.name === 'ranks');
+});
 
 document.addEventListener('click', (e) => {
   const el = e.target.closest('[data-action]');

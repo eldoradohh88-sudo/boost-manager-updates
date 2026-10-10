@@ -638,3 +638,9 @@ button:active:not(:disabled), .btn:active { transform: scale(.97); }
 ::-webkit-scrollbar-thumb:hover { background: var(--accent-line); background-clip: padding-box; border: 3px solid transparent; }
 ::-webkit-scrollbar-track { background: transparent; }
 body.no-anim .view, body.no-anim .guide-card { animation: none; }
+
+/* ---------- bot ---------- */
+.check { cursor: pointer; }
+.check input[type="checkbox"] { width: 18px; height: 18px; flex: 0 0 auto; padding: 0; margin-top: 2px; accent-color: var(--accent); }
+.raw-json { background: var(--field); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; font: 12.5px/1.5 ui-monospace, Consolas, monospace;
+  white-space: pre-wrap; word-break: break-word; max-height: 360px; overflow: auto; }
